@@ -4,7 +4,7 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2099 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 邹浩文 <627622230@qq.com>
+# | Author: zhwen <zhw@bt.cn>
 # +-------------------------------------------------------------------
 import os
 os.chdir("/www/server/panel")
@@ -203,6 +203,6 @@ class setPanelLets:
                 self.__save_cert_source(domain, get.email)
                 return  public.returnMsg(True, 'Panel lets set successfully')
             else:
-                return create_lets
+                return public.returnMsg(False, create_lets)
         else:
-            return create_site
+            return public.returnMsg(False, create_site)

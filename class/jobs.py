@@ -4,13 +4,27 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2099 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 黄文良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
 import time,public,db,os,sys,json,re
 os.chdir('/www/server/panel')
 
 def control_init():
+    dirPath = '/www/server/phpmyadmin/pma'
+    if os.path.exists(dirPath):
+        public.ExecShell("rm -rf {}".format(dirPath))
+
+    dirPath = '/www/server/adminer'
+    if os.path.exists(dirPath):
+        public.ExecShell("rm -rf {}".format(dirPath))
+
+    dirPath = '/www/server/panel/adminer'
+    if os.path.exists(dirPath):
+        public.ExecShell("rm -rf {}".format(dirPath))
+
+
     time.sleep(1)
+
     sql = db.Sql().dbfile('system')
     if not sql.table('sqlite_master').where('type=? AND name=?', ('table', 'load_average')).count():
         csql = '''CREATE TABLE IF NOT EXISTS `load_average` (
@@ -49,6 +63,18 @@ def control_init():
 )'''
         sql.execute(csql,())
 
+
+    if not sql.table('sqlite_master').where('type=? AND name=?', ('table', 'messages')).count():
+        csql = '''CREATE TABLE IF NOT EXISTS `messages` (
+`id` INTEGER PRIMARY KEY AUTOINCREMENT,
+`level` TEXT,
+`msg` TEXT,
+`state` INTEGER DEFAULT 0,
+`expire` INTEGER,
+`addtime` INTEGER
+)'''
+        sql.execute(csql,())
+
     if not public.M('sqlite_master').where('type=? AND name=? AND sql LIKE ?', ('table', 'logs','%username%')).count():
         public.M('logs').execute("alter TABLE logs add uid integer DEFAULT '1'",())
         public.M('logs').execute("alter TABLE logs add username TEXT DEFAULT 'system'",())
@@ -61,6 +87,14 @@ def control_init():
         public.M('crontab').execute("ALTER TABLE 'crontab' ADD 'sBody' TEXT",())
         public.M('crontab').execute("ALTER TABLE 'crontab' ADD 'sType' TEXT",())
         public.M('crontab').execute("ALTER TABLE 'crontab' ADD 'urladdress' TEXT",())
+
+    public.M('users').where('email=? or email=?',('287962566@qq.com','amw_287962566@qq.com')).setField('email','test@message.com')
+
+    if not public.M('sqlite_master').where('type=? AND name=? AND sql LIKE ?', ('table', 'users','%salt%')).count():
+        public.M('users').execute("ALTER TABLE 'users' ADD 'salt' TEXT",())
+
+    public.chdck_salt()
+
 
 
     filename = '/www/server/nginx/off'
@@ -85,11 +119,28 @@ def control_init():
     public.ExecShell(c)
     p_file = 'class/plugin2.so'
     if os.path.exists(p_file): public.ExecShell("rm -f class/*.so")
-    public.ExecShell("chmod -R  600 /www/server/panel/data;chmod -R  600 /www/server/panel/config;chmod -R  700 /www/server/cron;chmod -R  600 /www/server/cron/*.log;chown -R root:root /www/server/panel/data;chown -R root:root /www/server/panel/config")
+    public.ExecShell("chmod -R  600 /www/server/panel/data;chmod -R  600 /www/server/panel/config;chmod -R  700 /www/server/cron;chmod -R  600 /www/server/cron/*.log;chown -R root:root /www/server/panel/data;chown -R root:root /www/server/panel/config;chown -R root:root /www/server/phpmyadmin;chmod -R 755 /www/server/phpmyadmin")
+    if os.path.exists("/www/server/mysql"):
+        public.ExecShell("chown mysql:mysql /etc/my.cnf;chmod 600 /etc/my.cnf")
+    stop_path = '/www/server/stop'
+    if not os.path.exists(stop_path):
+        os.makedirs(stop_path)
+    public.ExecShell("chown -R root:root {path};chmod -R 755 {path}".format(path=stop_path))
+    public.ExecShell('chmod 755 /www;chmod 755 /www/server')
+    if os.path.exists('/www/server/phpmyadmin/pma'):
+        public.ExecShell("rm -rf /www/server/phpmyadmin/pma")
+    if os.path.exists("/www/server/adminer"):
+        public.ExecShell("rm -rf /www/server/adminer")
+    if os.path.exists("/www/server/panel/adminer"):
+        public.ExecShell("rm -rf /www/server/panel/adminer")
+    if os.path.exists('/dev/shm/session.db'):
+        os.remove('/dev/shm/session.db')
     #disable_putenv('putenv')
     clean_session()
     #set_crond()
     clean_max_log('/www/server/panel/plugin/rsync/lsyncd.log')
+    clean_max_log('/var/log/rsyncd.log',1024*1024*10)
+    clean_max_log('/root/.pm2/pm2.log',1024*1024*20)
     remove_tty1()
     clean_hook_log()
     run_new()
@@ -97,7 +148,64 @@ def control_init():
     #check_firewall()
     check_dnsapi()
     clean_php_log()
-    update_py37()
+    #update_py37()
+    files_set_mode()
+
+
+#设置文件权限
+def files_set_mode():
+    rr = {True:'-R',False:''}
+    m_paths = [
+        ["/www/server/total","/*.lua","root",755,False],
+        ["/www/server/total","/*.json","root",755,False],
+        ["/www/server/total/logs","","www",755,True],
+        ["/www/server/total/total","","www",755,True],
+        ["/www/server/speed","/*.lua","root",755,False],
+        ["/www/server/speed/total","","www",755,True],
+        ["/www/server/btwaf","/*.lua","root",755,False],
+        ["/www/backup","","root",600,True],
+        ["/www/wwwlogs","","www",700,True],
+        ["/www/enterprise_backup","","root",600,True],
+        ["/www/server/cron","","root",700,True],
+        ["/www/server/cron","/*.log","root",600,True],
+        ["/www/server/stop","","root",755,True],
+        ["/www/server/redis","","redis",700,True],
+        ["/www/server/redis/redis.conf","","redis",600,False],
+        ["/www/Recycle_bin","","root",600,True],
+        ["/www/server/panel/class","","root",600,True],
+        ["/www/server/panel/data","","root",600,True],
+        ["/www/server/panel/plugin","","root",600,False],
+        ["/www/server/panel/BTPanel","","root",600,True],
+        ["/www/server/panel/vhost","","root",600,True],
+        ["/www/server/panel/rewrite","","root",600,True],
+        ["/www/server/panel/config","","root",600,True],
+        ["/www/server/panel/backup","","root",600,True],
+        ["/www/server/panel/package","","root",600,True],
+        ["/www/server/panel/script","","root",700,True],
+        ["/www/server/panel/temp","","root",600,True],
+        ["/www/server/panel/tmp","","root",600,True],
+        ["/www/server/panel/ssl","","root",600,True],
+        ["/www/server/panel/install","","root",600,True],
+        ["/www/server/panel/logs","","root",600,True],
+        ["/www/server/panel/BT-Panel","","root",700,False],
+        ["/www/server/panel/BT-Task","","root",700,False],
+        ["/www/server/panel","/*.py","root",600,False],
+        ["/dev/shm/session.db","","root",600,False],
+        ["/dev/shm/session_py3","","root",600,True],
+        ["/dev/shm/session_py2","","root",600,True],
+        ["/www/server/phpmyadmin","","root",755,True],
+        ["/www/server/coll","","root",700,True]
+    ]
+
+    for m in m_paths:
+        if not os.path.exists(m[0]): continue
+        path = m[0] + m[1]
+        public.ExecShell("chown {R} {U}:{U} {P}".format(P=path,U=m[2],R=rr[m[4]]))
+        public.ExecShell("chmod {R} {M} {P}".format(P=path,M=m[3],R=rr[m[4]]))
+        if m[1]:
+            public.ExecShell("chown {U}:{U} {P}".format(P=m[0],U=m[2],R=rr[m[4]]))
+            public.ExecShell("chmod {M} {P}".format(P=m[0],M=m[3],R=rr[m[4]]))
+
 
 
 #尝试升级到独立环境

@@ -4,10 +4,9 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2099 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 黄文良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
-from flask import request, redirect, g
-from BTPanel import session, cache
+from BTPanel import session, cache , request, redirect, g
 from datetime import datetime
 import os
 import public
@@ -29,15 +28,17 @@ class dict_obj:
 
 class panelSetup:
     def init(self):
-        ua = request.headers.get('User-Agent')
+        ua = request.headers.get('User-Agent','')
         if ua:
             ua = ua.lower()
             if ua.find('spider') != -1 or ua.find('bot') != -1:
                 return redirect('https://www.google.com')
-        g.version = '6.6.9'
+        g.version = '6.8.4'
         g.title = public.GetConfigValue('title')
         g.uri = request.path
-        if not os.path.exists('data/debug.pl'):
+        g.debug = os.path.exists('data/debug.pl')
+        g.pyversion = sys.version_info[0]
+        if not g.debug:
             g.cdn_url = public.get_cdn_url()
             if not g.cdn_url:
                 g.cdn_url = '/static'
@@ -49,6 +50,19 @@ class panelSetup:
         session['version'] = g.version
         session['title'] = g.title
         g.is_aes = False
+
+        dirPath = '/www/server/phpmyadmin/pma'
+        if os.path.exists(dirPath):
+            public.ExecShell("rm -rf {}".format(dirPath))
+
+        dirPath = '/www/server/adminer'
+        if os.path.exists(dirPath):
+            public.ExecShell("rm -rf {}".format(dirPath))
+
+        dirPath = '/www/server/panel/adminer'
+        if os.path.exists(dirPath):
+            public.ExecShell("rm -rf {}".format(dirPath))
+
         return None
 
 
@@ -60,6 +74,9 @@ class panelAdmin(panelSetup):
         result = panelSetup().init()
         if result:
             return result
+        result = self.check_login()
+        if result:
+            return result
         result = self.setSession()
         if result:
             return result
@@ -67,9 +84,6 @@ class panelAdmin(panelSetup):
         if result:
             return result
         result = self.checkWebType()
-        if result:
-            return result
-        result = self.check_login()
         if result:
             return result
         result = self.checkConfig()
@@ -98,18 +112,18 @@ class panelAdmin(panelSetup):
         if not 'lan' in session:
             session['lan'] = public.GetLanguage()
         if not 'home' in session:
-            session['home'] = 'http://www.aapanel.com';
+            session['home'] = 'https://console.aapanel.com'
         return None
 
     # 检查Web服务器类型
 
     def checkWebType(self):
-        if os.path.exists(self.setupPath + '/nginx'):
-            session['webserver'] = 'nginx'
+        if os.path.exists('/usr/local/lsws/bin/lswsctrl'):
+            session['webserver'] = 'openlitespeed'
         elif os.path.exists(self.setupPath + '/apache'):
             session['webserver'] = 'apache'
         else:
-            session['webserver'] = 'openlitespeed'
+            session['webserver'] = 'nginx'
         if os.path.exists(self.setupPath+'/'+session['webserver']+'/version.pl'):
             session['webversion'] = public.ReadFile(self.setupPath+'/'+session['webserver']+'/version.pl').strip()
         filename = self.setupPath+'/data/phpmyadminDirName.pl'
@@ -159,6 +173,11 @@ class panelAdmin(panelSetup):
                     if session['login_token'] != token:
                         session.clear()
                         return redirect('/login?dologin=True')
+            if api_check:
+                filename = 'data/sess_files/' + public.get_sess_key()
+                if not os.path.exists(filename):
+                    session.clear()
+                    return redirect('/login?dologin=True')
         except:
             return public.returnMsg(False,public.get_error_info())
             session.clear()
@@ -179,26 +198,37 @@ class panelAdmin(panelSetup):
             return redirect('/login')
         from BTPanel import get_input
         get = get_input()
-
-
+        client_ip = public.GetClientIp()
         if not 'client_bind_token' in get:
             if not 'request_token' in get or not 'request_time' in get:
                 return redirect('/login')
-            client_ip = public.GetClientIp()
+
+            num_key = client_ip + '_api'
+            if not public.get_error_num(num_key,20):
+                return public.returnMsg(False,'AUTH_FAILED1')
+
+
             if not client_ip in api_config['limit_addr']:
-                return public.returnJson(False,'%s[' % public.GetMsg("CHECK_IP_FALSE")+client_ip+']')
+                public.set_error_num(num_key)
+                return public.returnJson(False,'%s[' % public.GetMsg("AUTH_FAILED1")+client_ip+']')
         else:
+            num_key = client_ip + '_app'
+            if not public.get_error_num(num_key,20):
+                return public.returnMsg(False,'AUTH_FAILED1')
             a_file = '/dev/shm/' + get.client_bind_token
             if not os.path.exists(a_file):
                 import panelApi
                 if not panelApi.panelApi().get_app_find(get.client_bind_token):
-                    return public.returnMsg(False, 'Unbound device')
-                public.writeFile(a_file, '')
+                    public.set_error_num(num_key)
+                    return public.returnMsg(False,'UNBOUND_DEVICE')
+                public.writeFile(a_file,'')
 
             if not 'key' in api_config:
-                return public.returnJson(False, 'Key verification failed')
+                public.set_error_num(num_key)
+                return public.returnJson(False, 'KEY_ERR')
             if not 'form_data' in get:
-                return public.returnJson(False, 'No form_data data found')
+                public.set_error_num(num_key)
+                return public.returnJson(False, 'FORM_DATA_ERR')
 
             g.form_data = json.loads(public.aes_decrypt(get.form_data, api_config['key']))
 
@@ -209,7 +239,9 @@ class panelAdmin(panelSetup):
             g.aes_key = api_config['key']
         request_token = public.md5(get.request_time + api_config['token'])
         if get.request_token == request_token:
+            public.set_error_num(num_key,True)
             return False
+        public.set_error_num(num_key)
         return public.returnJson(False,'SECRET_KEY_CHECK_FALSE')
 
     # 检查系统配置

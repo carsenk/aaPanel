@@ -77,7 +77,26 @@ var site = {
                             return "<span class='c9 input-edit'  onclick=\"bt.pub.set_data_by_key('sites','ps',this)\">" + item.ps + "</span>";
                         }
                     },
-
+                    {
+                        field: 'ssl', title: 'SSL certificate', width: 110, templet: function (item) {
+                            var _ssl = '';
+                            if (item.ssl == -1)
+                            {
+                                _ssl = '<a class="ssl_tips btlink" style="color:orange;">Not deployed</a>';
+                            }else{
+                                var ssl_info = "Certificate: "+item.ssl.issuer+"<br>Due date: " + item.ssl.notAfter+"<br>Application date: " + item.ssl.notBefore +"<br>Domain name: " + item.ssl.dns.join("/");
+                                if(item.ssl.endtime < 0){
+                                    _ssl = '<a class="ssl_tips btlink" style="color:red;" data-tips="'+ssl_info+'">Expired</a>';
+                                
+                                }else if(item.ssl.endtime < 20){
+                                    _ssl = '<a class="ssl_tips btlink" style="color:red;" data-tips="'+ssl_info+'">Expire: '+(item.ssl.endtime+' days')+'</a>';
+                                }else{
+                                    _ssl = '<a class="ssl_tips btlink" style="color:green;" data-tips="'+ssl_info+'">Expire: '+item.ssl.endtime+' days</a>';
+                                }
+                            }
+                            return _ssl;
+                        }
+                    },
                     {
                         field: 'opt',
                         width: 260,
@@ -87,7 +106,7 @@ var site = {
                             var opt = '';
                             var _check = ' onclick="site.site_waf(\'' + item.name + '\')"';
 
-                            if (bt.os == 'Linux') opt += '<a href="javascript:;" ' + _check + ' class="btlink ">' + lan.site.firewalld + '</a> | ';
+                            //if (bt.os == 'Linux') opt += '<a href="javascript:;" ' + _check + ' class="btlink ">' + lan.site.firewalld + '</a> | ';
                             opt += '<a href="javascript:;" class="btlink" onclick="site.web_edit(this)">' + lan.site.set + ' </a> | ';
                             opt += '<a href="javascript:;" class="btlink" onclick="site.del_site(' + item.id + ',\'' + item.name + '\')" title="' + lan.site.del_site + '">' + lan.site.del + '</a>';
                             return opt;
@@ -96,7 +115,30 @@ var site = {
                 ],
                 data: data
             })
-
+            var outTime = '';
+            $('.ssl_tips').hover(function(){
+                var that = this,tips = $(that).attr('data-tips');
+                if(!tips) return false;
+                outTime = setTimeout(function(){
+                    layer.tips(tips, $(that), {
+                        tips: [2, '#20a53a'], //还可配置颜色
+                        time:0
+                    });
+                },500);
+            },function(){
+                outTime != ''?clearTimeout(outTime):'';
+                layer.closeAll('tips');
+            })
+            $('.ssl_tips').click(function(){
+                site.web_edit(this);
+                var timeVal = setInterval(function(){
+                    var content = $('#webedit-con').html();
+                    if(content != ''){
+                        $('.site-menu p:eq(9)').click();
+                        clearInterval(timeVal);
+                    }
+                },100);
+            });
             //设置到期时间
             $('a.setTimes').each(function() {
                     var _this = $(this);
@@ -190,7 +232,7 @@ var site = {
                     closeBtn: 2,
                     shift: 5,
                     shadeClose: false,
-                    content: "<div class='divtable pd15 style='padding-bottom: 0'><button id='btn_data_backup' class='btn btn-success btn-sm' type='button' style='margin-bottom:10px'>" + lan.database.backup + "</button><table width='100%' id='SiteBackupList' class='table table-hover'></table><div class='page sitebackup_page'></div></div>"
+                    content: "<div class='divtable pd15 style='padding-bottom: 0'><button id='btn_data_backup' class='btn btn-success btn-sm' type='button' style='margin-bottom:10px'>" + lan.database.backup + "</button><table width='100%' id='SiteBackupList' class='table table-hover'></table><ul class='help-info-text c7'><li>Before restoring data, all data in the root dir of the website  will be moved to the panel recycle bin.</li></ul><div class='page sitebackup_page'></div></div>"
                 });
             }
             setTimeout(function() {
@@ -212,7 +254,8 @@ var site = {
                             title: lan.site.operate,
                             align: 'right',
                             templet: function(item) {
-                                var _opt = '<a class="btlink" href="/download?filename=' + item.filename + '&amp;name=' + item.name + '" target="_blank">' + lan.site.download + '</a> | ';
+                                var _opt = '<a class="btlink restore" site-id="' + id + '" backup-name="' + item.name + '">Restore</a> | ';
+                                _opt += '<a class="btlink" href="/download?filename=' + item.filename + '&amp;name=' + item.name + '" target="_blank">' + lan.site.download + '</a> | ';
                                 _opt += '<a class="btlink" herf="javascrpit:;" onclick="bt.site.del_backup(\'' + item.id + '\',\'' + id + '\',\'' + siteName + '\')">' + lan.site.del + '</a>'
                                 return _opt;
                             }
@@ -226,9 +269,47 @@ var site = {
                         if (rdata.status) site.site_detail(id, siteName);
                         site.get_list();
                     });
+                });
+                $('#SiteBackupList .restore').unbind('click').click(function() {
+                    var data = {};
+                        data.file_name = $(this).attr('backup-name');
+                        data.site_id = $(this).attr('site-id');
+                    layer.confirm('Are you sure to restore backup file?', {
+                        icon: 0,
+                        closeBtn: 2,
+						title: 'Restore backup file',
+					}, function (index) {
+                        $.post('/files?action=restore_website', data, function(rdata) {
+                            layer.close(index);
+                            site.backup_output_stop = true;
+                            layer.msg(rdata.msg, {icon: rdata.status ? 1 : 2});
+                        });
+                        site.backup_output_logs();
+					});
                 })
             }, 100)
         });
+    },
+    backup_output_stop: false,
+    //实时显示过程
+    backup_output_logs: function () {
+        var layerT = layer.open({
+            type: 1,
+            area: '590px',
+            title: 'Recovering the backup...',
+            closeBtn: 0,
+            content: '<div><div><pre class="backup_logs" style="height: 390px;background: #000;color: #fff;margin-bottom: 0;"></pre></div></div>',
+        });
+        var show_output = setInterval(function(){
+            $.post('/files?action=get_progress', function(rdata){
+                if(site.backup_output_stop) {
+                    layer.close(layerT);
+                    clearInterval(show_output);
+                }
+                $('.backup_logs').html(rdata.msg);
+                $('.backup_logs').scrollTop($('.backup_logs')[0].scrollHeight);
+            })
+        }, 1000);
     },
     add_site: function() {
         bt.site.add_site(function(rdata) {
@@ -949,7 +1030,7 @@ var site = {
                     columns: [
                         { field: 'name', title: lan.site.domain, templet: function(item) { return "<a title='" + lan.site.click_access + "' target='_blank' href='http://" + item.name + ":" + item.port + "' class='btlinkbed'>" + item.name + "</a>" } },
                         { field: 'port', width: '70px', title: lan.site.port },
-                        { field: 'opt', width: '50px', title: lan.site.operate, templet: function(item) { return '<a class="table-btn-del domain_del" href="javascript:;"><span class="glyphicon glyphicon-trash"></span></a>'; } }
+                        { field: 'opt', width: '50px', align: 'center', title: lan.site.operate, templet: function(item) { return '<a class="table-btn-del domain_del" href="javascript:;"><span class="glyphicon glyphicon-trash"></span></a>'; } }
                     ],
                     data: rdata
                 })
@@ -1048,7 +1129,7 @@ var site = {
                                             width: '130px',
                                             items: arrs,
                                             callback: function(obj) {
-                                                var spath = '/www/server/panel/rewrite/' + bt.get_cookie('serverType') + '/' + obj.val() + '.conf';
+                                                var spath = '/www/server/panel/rewrite/' + (bt.get_cookie('serverType')=='openlitespeed'?'apache':bt.get_cookie('serverType')) + '/' + obj.val() + '.conf';
                                                 bt.files.get_file_body(spath, function(sdata) {
                                                     $('.dir_config').text(sdata.data);
                                                 })
@@ -1143,7 +1224,7 @@ var site = {
                         {
                             title: '',
                             items: [
-                                { name: 'path', title: lan.site.site_menu_2, width: '50%', value: path, event: { css: 'glyphicon-folder-open', callback: function(obj) { bt.select_path(obj); } } },
+                                { name: 'path', title: lan.site.site_menu_2, width: '50%', value: path, add_class: 'ml5', event: { css: 'glyphicon-folder-open', callback: function(obj) { bt.select_path(obj); } } },
                                 {
                                     name: 'btn_site_path',
                                     type: 'button',
@@ -1160,7 +1241,7 @@ var site = {
                         {
                             title: '',
                             items: [
-                                { title: lan.site.run_dir, width: '50%', value: rdata.runPath.runPath, name: 'dirName', type: 'select', items: dirs },
+                                { title: lan.site.run_dir, width: '50%', value: rdata.runPath.runPath, name: 'dirName', type: 'select',add_class: 'ml5 mr20', items: dirs },
                                 {
                                     name: 'btn_run_path',
                                     type: 'button',
@@ -1182,6 +1263,7 @@ var site = {
                         _html.append($(_form_data.html).addClass('line mtb10'));
                         clicks = clicks.concat(_form_data.clicks);
                     }
+                    _html.find('input[name="path"]').parent().css('padding-left','27px');
                     _html.find('input[type="checkbox"]').parent().addClass('label-input-group ptb10');
                     _html.find('button[name="btn_run_path"]').addClass('ml45');
                     _html.find('button[name="btn_site_path"]').addClass('ml33');
@@ -1216,7 +1298,7 @@ var site = {
                             ]
                             for (var i = 0; i < dpwds.length; i++) {
                                 var _from_pwd = bt.render_form_line(dpwds[i]);
-                                _div.append("<div class='line'>" + _from_pwd.html + "</div>");
+                                _div.append("<div>" + _from_pwd.html + "</div>");
                                 bt.render_clicks(_from_pwd.clicks);
                             }
                         } else {
@@ -1362,11 +1444,11 @@ var site = {
                     }
                 });
                 $('#ols').on('click', function() {
-                    private.toggle();
-                    checked = private.is(':hidden') ? false : true;
+                    var loadT = bt.load();
                     bt.send('switch_ols_private_cache', 'config/switch_ols_private_cache', { id: web.id }, function(res) {
-                        var loadT = bt.load();
                         loadT.close();
+                        private.toggle();
+                        checked = private.is(':hidden') ? false : true;
                         bt.msg(res);
                         if (checked) {
                             bt.send('get_ols_private_cache', 'config/get_ols_private_cache', { id: web.id }, function(fdata) {
@@ -1472,24 +1554,28 @@ var site = {
                         callback: function(obj) {
                             if (bt.os == 'Linux') {
                                 var spath = filename;
-                                if (obj.val() != lan.site.rewritename) spath = '/www/server/panel/rewrite/' + webserver + '/' + obj.val() + '.conf';
+                                if (obj.val() != lan.site.rewritename) spath = '/www/server/panel/rewrite/' + (webserver == 'openlitespeed'?'apache':webserver) + '/' + obj.val() + '.conf';
                                 bt.files.get_file_body(spath, function(ret) {
-                                    editor.setValue(ret.data);
+                                    aceEditor.ACE.setValue(ret.data);
+                                    aceEditor.ACE.moveCursorTo(0, 0); 
+                                    aceEditor.path = spath;
                                 })
                             }
                         }
                     },
-                    { items: [{ name: 'config', type: 'textarea', value: rdata.data, widht: '340px', height: '200px' }] },
+                    { items: [{ name: 'config', type: 'div', value: rdata.data, widht: '340px', height: '200px' }] },
                     {
                         items: [{
                                 name: 'btn_save',
                                 text: lan.site.save,
                                 type: 'button',
                                 callback: function(ldata) {
-                                    bt.files.set_file_body(filename, editor.getValue(), 'utf-8', function(ret) {
-                                        if (ret.status) site.reload(4)
-                                        bt.msg(ret);
-                                    })
+                                    // bt.files.set_file_body(filename, editor.getValue(), 'utf-8', function(ret) {
+                                    //     if (ret.status) site.reload(4)
+                                    //     bt.msg(ret);
+                                    // })
+                                    aceEditor.path = filename;
+                                    bt.saveEditor(aceEditor);
                                 }
                             },
                             {
@@ -1536,27 +1622,26 @@ var site = {
                     _html.find('.info-r').append(_other)
                     clicks = clicks.concat(_form_data.clicks);
                 }
-                _html.append(bt.render_help([lan.site.rewrite_tips, lan.site.edit_rewrite]));
+                _html.append(bt.render_help([lan.site.rewrite_tips_1,lan.site.rewrite_tips_2, lan.site.edit_rewrite]));
                 $('#webedit-con').append(_html);
                 bt.render_clicks(clicks);
 
-                $('textarea.config').attr('id', 'config_rewrite');
-                var editor = CodeMirror.fromTextArea(document.getElementById("config_rewrite"), {
-                    extraKeys: { "Ctrl-Space": "autocomplete" },
-                    lineNumbers: true,
-                    matchBrackets: true,
-                });
+                // $('textarea.config').attr('id', 'config_rewrite');
+                // var editor = CodeMirror.fromTextArea(document.getElementById("config_rewrite"), {
+                //     extraKeys: { "Ctrl-Space": "autocomplete" },
+                //     lineNumbers: true,
+                //     matchBrackets: true,
+                // });
 
-                $(".CodeMirror-scroll").css({ "height": "340px", "margin": 0, "padding": 0 });
-                $(".soft-man-con .CodeMirror").css({ "height": "342px" });
-                setTimeout(function() {
-                    editor.refresh();
-                }, 250);
+                // $(".CodeMirror-scroll").css({ "height": "340px", "margin": 0, "padding": 0 });
+                // $(".soft-man-con .CodeMirror").css({ "height": "342px" });
+                // setTimeout(function() {
+                //     editor.refresh();
+                // }, 250);
+                $('div.config').attr('id', 'config_rewrite').css({'height':'360px','width':'540px'})
+                var aceEditor = bt.aceEditor({el:'config_rewrite',content:rdata.data});
 
-                $('select.rewrite').trigger('change')
-
-
-
+                $('select.rewrite').trigger('change');
             })
         },
         set_default_index: function(web) {
@@ -1589,17 +1674,19 @@ var site = {
         set_config: function(web) {
             var con = '<p style="color: #666; margin-bottom: 7px">Tips：Ctrl+F Search keywords，Ctrl+S Save，Ctrl+H Search and replace</p><div class="bt-input-text ace_config_editor_scroll" style="height: 400px; line-height:18px;" id="siteConfigBody"></div>\
 				<button id="OnlineEditFileBtn" class="btn btn-success btn-sm" style="margin-top:10px;">Save</button>\
-				<ul class="c7 ptb15">\
-					<li>This is primary configuration file of the site, do NOT modify it at will if you do not know configuration rules.</li>\
+				<ul class="help-info-text c7">\
+                    <li>This is primary configuration file of the site.</li>\
+                    <li>Do not modify it at will if you do not know configuration rules.</li>\
 				</ul>';
             $("#webedit-con").html(con);
-            var config = bt.aceEditor({ el: 'siteConfigBody', path: '/www/server/panel/vhost/' + bt.get_cookie('serverType') + '/' + web.name + '.conf' })
+            var webserve = bt.get_cookie('serverType'),
+            config = bt.aceEditor({ el: 'siteConfigBody', path: '/www/server/panel/vhost/' + (webserve == 'openlitespeed' ? (webserve + '/detail') : webserve) + '/' + web.name + '.conf' });
             $("#OnlineEditFileBtn").click(function(e) {
                 bt.saveEditor(config);
             });
         },
         set_ssl: function(web) {
-            $('#webedit-con').html("<div id='ssl_tabs'></div><div class=\"tab-con\" style=\"padding:10px 0px;\"></div>");
+            $('#webedit-con').html("<div id='ssl_tabs'></div><div class=\"tab-con\" style=\"padding:10px 0px;width: 100%;\"></div>");
             bt.site.get_site_ssl(web.name, function(rdata) {
                 var _tabs = [
                     // {
@@ -1718,18 +1805,18 @@ var site = {
                             if (rdata.status && rdata.type == 1) {
                                 var cert_info = '';
                                 if (rdata.cert_data['notBefore']) {
-                                    cert_info = '<div style="margin-bottom: 10px;" class="alert alert-success">\
+                                    cert_info = '<div style="margin-bottom: 10px;padding: 10px;" class="alert alert-success">\
                                         <span style="display: inline-block;overflow: hidden;min-width: 49%;text-overflow: ellipsis;white-space: nowrap;max-width: 100%;"><b>' + lan.site.deploy_success_cret + '</b>' + lan.site.try_renew_cret + '</span>\
                                         <span style="display: inline-block;overflow: hidden;min-width: 49%;text-overflow: ellipsis;white-space: nowrap;max-width: 100%;">\
                                         <b>' + lan.site.cert_brand + '</b>' + rdata.cert_data.issuer + '</span>\
                                         <span style="display: inline-block;overflow: hidden;min-width: 49%;text-overflow: ellipsis;white-space: nowrap;max-width: 100%;"><b>' + lan.site.auth_domain + '</b> ' + rdata.cert_data.dns.join('、') + '</span>\
                                         <span style="display: inline-block;overflow: hidden;min-width: 49%;text-overflow: ellipsis;white-space: nowrap;max-width: 100%;"><b>' + lan.site.expire_time + '</b> ' + rdata.cert_data.notAfter + '</span></div>'
                                 }
-                                robj.append('<div>' + cert_info + '<div><span>' + lan.site.ssl_key + '</span><span style="padding-left:175px">' + lan.site.ssl_crt + '</span></div></div>');
+                                robj.append('<div>' + cert_info + '<div><span>' + lan.site.ssl_key + '</span><span style="padding-left:190px">' + lan.site.ssl_crt + '</span></div></div>');
                                 var datas = [{
                                         items: [
-                                            { name: 'key', width: '45%', height: '220px', type: 'textarea', value: rdata.key },
-                                            { name: 'csr', width: '45%', height: '220px', type: 'textarea', value: rdata.csr }
+                                            { name: 'key', width: '48%', height: '220px', type: 'textarea', value: rdata.key },
+                                            { name: 'csr', width: '48%', height: '220px', type: 'textarea', value: rdata.csr }
                                         ]
                                     },
                                     {
@@ -1759,7 +1846,8 @@ var site = {
                                     robj.append(_form_data.html);
                                     bt.render_clicks(_form_data.clicks);
                                 }
-                                robj.find('textarea').css('background-color', '#f6f6f6').attr('readonly', true);
+                                robj.find('textarea').css({'background-color':'#f6f6f6','resize':'none'}).attr('readonly', true);
+                                robj.find('[name=csr]').css('margin-right', '0');
                                 var helps = [
                                     lan.site.ssl_tips1,
                                     lan.site.ssl_tips2,
@@ -1838,7 +1926,7 @@ var site = {
                                                         class: 'checks_line',
                                                         items: [{
                                                             name: 'dns_select',
-                                                            width: '120px',
+                                                            width: 'auto',
                                                             type: 'select',
                                                             items: arrs_list,
                                                             callback: function(obj) {
@@ -2005,17 +2093,17 @@ var site = {
                         callback: function(robj) {
                             var cert_info = '';
                             if (rdata.cert_data['notBefore']) {
-                                cert_info = '<div style="margin-bottom: 10px;" class="alert alert-success">\
+                                cert_info = '<div style="margin-bottom: 10px;padding: 10px;" class="alert alert-success">\
                                         <span style="display: inline-block;overflow: hidden;min-width: 49%;text-overflow: ellipsis;white-space: nowrap;max-width: 100%;">' + (rdata.status ? lan.site.deploy_success_tips : lan.site.not_deploy_and_save) + '</span>\
                                         <span style="display: inline-block;overflow: hidden;min-width: 49%;text-overflow: ellipsis;white-space: nowrap;max-width: 100%;"><b>' + lan.site.cert_brand + '</b>' + rdata.cert_data.issuer + '</span>\
                                         <span style="display:inline-block;max-width: 100%;min-width: 49%;overflow:hidden;text-overflow:ellipsis;white-space: nowrap; "><b>' + lan.site.auth_domain + '</b> ' + rdata.cert_data.dns.join('、') + '</span>\
                                         <span style="display:inline-block;max-width: 100%;min-width: 49%;overflow:hidden;text-overflow:ellipsis;white-space: nowrap; "><b>' + lan.site.expire_time + '</b> ' + rdata.cert_data.notAfter + '</span></div>'
                             }
-                            robj.append('<div>' + cert_info + '<div><span>' + lan.site.ssl_key + '</span><span style="padding-left:171px">' + lan.site.ssl_crt + '</span></div></div>');
+                            robj.append('<div>' + cert_info + '<div><span>' + lan.site.ssl_key + '</span><span style="padding-left:190px">' + lan.site.ssl_crt + '</span></div></div>');
                             var datas = [{
                                     items: [
-                                        { name: 'key', width: '45%', height: '220px', type: 'textarea', value: rdata.key },
-                                        { name: 'csr', width: '45%', height: '220px', type: 'textarea', value: rdata.csr }
+                                        { name: 'key', width: '48%', height: '220px', type: 'textarea', value: rdata.key },
+                                        { name: 'csr', width: '48%', height: '220px', type: 'textarea', value: rdata.csr }
                                     ]
                                 },
                                 {
@@ -2054,7 +2142,9 @@ var site = {
                                 lan.site.ssl_tips5,
                             ]
                             robj.append(bt.render_help(helps));
-
+                            robj.find(".help-info-text").css('margin-top','0');
+                            robj.find('textarea').css('resize','none');
+                            robj.find('[name=csr]').css('margin-right', '0');
                         }
                     },
                     {
@@ -2098,7 +2188,7 @@ var site = {
                                         { field: 'issuer', width: '150px', title: lan.site.brand },
                                         {
                                             field: 'opt',
-                                            width: '75px',
+                                            width: '100px',
                                             align: 'right',
                                             title: lan.site.operate,
                                             templet: function(item) {
@@ -2189,7 +2279,7 @@ var site = {
                     _html.append(bt.render_help([lan.site.switch_php_help1, lan.site.switch_php_help2, lan.site.switch_php_help3]));
                     $('#webedit-con').append(_html);
                     bt.render_clicks(_form_data.clicks);
-                    $('#webedit-con').append('<div class="user_pw_tit" style="margin-top: 2px;padding-top: 11px;border-top: #ccc 1px dashed;"><span class="tit">' + lan.site.session_off + '</span><span class="btswitch-p"style="display: inline-flex;"><input class="btswitch btswitch-ios" id="session_switch" type="checkbox"><label class="btswitch-btn session-btn" for="session_switch" ></label></span></div><div class="user_pw" style="margin-top: 10px; display: block;"></div>' + bt.render_help([lan.site.independent_storage]));
+                    $('#webedit-con').append('<div class="user_pw_tit" style="margin-top: 2px;padding-top: 11px;border-top: #ccc 1px dashed;"><span class="tit">' + lan.site.session_off + '</span><span class="btswitch-p ml5" style="margin-bottom: 0;display: inline-block;vertical-align: middle;"><input class="btswitch btswitch-ios" id="session_switch" type="checkbox"><label class="btswitch-btn session-btn" for="session_switch" ></label></span></div><div class="user_pw" style="margin-top: 10px; display: block;"></div>' + bt.render_help([lan.site.independent_storage]));
 
                     function get_session_status() {
                         var loading = bt.load('Getting session status...');
@@ -2251,7 +2341,7 @@ var site = {
                         "<div class='info-r  ml0 mt5' >" +
                         "<input class='btswitch btswitch-ios' id='type' type='checkbox' name='type' " + (obj.type == 1 ? 'checked="checked"' : '') + " /><label class='btswitch-btn phpmyadmin-btn' for='type' style='float:left'></label>" +
                         "<div style='display: inline-block;'>" +
-                        "<span class='tname' style='margin-left:10px;position: relative;top: -5px; width:150px;'>" + lan.site.reserve_url + "</span>" +
+                        "<span class='tname' style='margin-left:51px;position: relative;top: -5px; width:150px;'>" + lan.site.reserve_url + "</span>" +
                         "<input class='btswitch btswitch-ios' id='holdpath' type='checkbox' name='holdpath' " + (obj.holdpath == 1 ? 'checked="checked"' : '') + " /><label class='btswitch-btn phpmyadmin-btn' for='holdpath' style='float:left'></label>" +
                         "</div>" +
                         "</div>" +
@@ -2269,10 +2359,12 @@ var site = {
                         "</div>" +
                         "<div class='line redirectdomain' style='display:" + (obj.domainorpath == 'domain' ? 'block' : 'none') + "'>" +
                         "<span class='tname'>" + lan.site.redirect_domain + "</span>" +
-                        "<div class='info-r  ml0'>" +
+                        "<div class='info-r  ml0' style='height: 35px;'>" +
                         "<select id='usertype' name='redirectdomain' data-actions-box='true' class='selectpicker show-tick form-control' multiple data-live-search='false'>" + domain_html + "</select>" +
-                        "<span class='tname' style='width:90px'>" + lan.site.target_url + "</span>" +
-                        "<input  name='tourl' class='bt-input-text mr5' type='text' style='width:200px;padding-left: 9px;' value='" + obj.tourl + "'>" +
+                        "</div>" +
+                        "<span class='tname'>" + lan.site.target_url + "</span>" +
+                        "<div class='info-r  ml0'>" +
+                        "<input  name='tourl' class='bt-input-text mr5' type='text' style='width:200px;padding-left: 9px;' value='" + obj.tourl + "'>"+
                         "</div>" +
                         "</div>" +
                         "<div class='line redirectpath' style='display:" + (obj.domainorpath == 'path' ? 'block' : 'none') + "'>" +
@@ -2654,29 +2746,34 @@ var site = {
                     "<input class='btswitch btswitch-ios' id='openNginx' type='checkbox' name='cache' " + (obj.cache == 1 ? 'checked="checked"' : '') + "'><label class='btswitch-btn phpmyadmin-btn' for='openNginx'></label>" +
                     "</div>" +
                     "<div style='display: inline-block;'>" +
-                    "<span class='tname' style='margin-left:10px;position: relative;top: -5px;width:150px;'>" + lan.site.proxy_adv + "</span>" +
+                    "<span class='tname' style='position: relative;top: -5px;width:150px;padding-right: 10px;'>" + lan.site.proxy_adv + "</span>" +
                     "<input class='btswitch btswitch-ios' id='openAdvanced' type='checkbox' name='advanced' " + (obj.advanced == 1 ? 'checked="checked"' : '') + "'><label class='btswitch-btn phpmyadmin-btn' for='openAdvanced'></label>" +
                     "</div>" +
                     "</div>" +
                     "</div>" +
                     "<div class='line' style='clear:both;'>" +
                     "<span class='tname'>" + lan.site.proxy_name + "</span>" +
-                    "<div class='info-r  ml0'><input name='proxyname'" + (type ? "" : "readonly='readonly'") + " class='bt-input-text mr5 " + (type ? "" : " disabled") + "' type='text' style='width:200px' value='" + obj.proxyname + "'></div>" +
+                    "<div class='info-r  ml0'><input name='proxyname'" + (type ? "" : "readonly='readonly'") + " class='bt-input-text mr5 " + (type ? "" : " disabled") + "' type='text' style='width:220px' value='" + obj.proxyname + "'></div>" +
                     "</div>" +
                     "<div class='line cachetime' style='display:" + (obj.cache == 1 ? 'block' : 'none') + "'>" +
                     "<span class='tname'>" + lan.site.cache_time + "</span>" +
-                    "<div class='info-r  ml0'><input name='cachetime'class='bt-input-text mr5' type='text' style='width:200px' value='" + obj.cachetime + "'>" + lan.site.minute + "</div>" +
+                    "<div class='info-r  ml0'><input name='cachetime'class='bt-input-text mr5' type='text' style='width:220px' value='" + obj.cachetime + "'>" + lan.site.minute + "</div>" +
                     "</div>" +
                     "<div class='line advanced'  style='display:" + (obj.advanced == 1 ? 'block' : 'none') + "'>" +
                     "<span class='tname'>" + lan.site.proxy_dir + "</span>" +
-                    "<div class='info-r  ml0'><input id='proxydir' name='proxydir' class='bt-input-text mr5' type='text' style='width:200px' value='" + obj.proxydir + "'>" +
+                    "<div class='info-r  ml0'><input id='proxydir' name='proxydir' class='bt-input-text mr5' type='text' style='width:220px' value='" + obj.proxydir + "'>" +
                     "</div>" +
                     "</div>" +
                     "<div class='line'>" +
                     "<span class='tname'>" + lan.site.target_url + "</span>" +
                     "<div class='info-r  ml0'>" +
-                    "<input name='proxysite' class='bt-input-text mr10' type='text' style='width:200px' value='" + obj.proxysite + "'>" +
-                    "<span class='mlr15'>" + lan.site.proxy_domain + "</span><input name='todomain' class='bt-input-text ml10' type='text' style='width:200px' value='" + obj.todomain + "'>" +
+                    "<input name='proxysite' class='bt-input-text mr10' type='text' style='width:220px' value='" + obj.proxysite + "'>" +
+                    "</div>" +
+                    "</div>" +
+                    "<div class='line'>" +
+                    "<span class='tname'>" + lan.site.proxy_domain + "</span>" +
+                    "<div class='info-r  ml0'>" +
+                    "<input name='todomain' class='bt-input-text ml10' type='text' style='width:220px' value='" + obj.todomain + "'>"+
                     "</div>" +
                     "</div>" +
                     "<div class='line replace_conter' style='display:" + (bt.get_cookie('serverType') == 'nginx' ? 'block' : 'none') + "'>" +
@@ -2971,6 +3068,7 @@ var site = {
                     robj.append(_form_data.html);
                     bt.render_clicks(_form_data.clicks);
                 }
+                robj.find("#none").css('margin-top','10px')
                 $("#none").before("</br>");
                 var helps = [lan.site.access_empty_ref_default, lan.site.multi_url, lan.site.trigger_return_404]
                 robj.append(bt.render_help(helps));
@@ -3009,9 +3107,10 @@ var site = {
         get_site_logs: function(web) {
             bt.site.get_site_logs(web.name, function(rdata) {
                 var robj = $('#webedit-con');
-                var logs = { class: 'bt-logs', items: [{ name: 'site_logs', height: '520px', value: rdata.msg, width: '100%', type: 'textarea' }] };
+                var logs = { class: 'bt-logs', items: [{ name: 'site_logs', height: '592px', value: rdata.msg, width: '100%', type: 'textarea' }] };
                 var _form_data = bt.render_form_line(logs);
                 robj.append(_form_data.html);
+                robj.find('.site_logs').css('resize','none');
                 bt.render_clicks(_form_data.clicks);
                 $('textarea[name="site_logs"]').attr('readonly', true);
                 $('textarea[name="site_logs"]').scrollTop(100000000000)
@@ -3099,7 +3198,7 @@ var site = {
             content: "<div class='bt-form'><div class='bt-w-menu site-menu pull-left' style='height: 100%;'></div><div id='webedit-con' class='bt-w-con webedit-con pd15'></div></div>"
         })
         setTimeout(function() {
-            var webcache = bt.get_cookie('serverType') == 'openlitespeed' ? { title: 'LSCache', callback: site.edit.ols_cache } : '';
+            var webcache = bt.get_cookie('serverType') == 'openlitespeed' ? { title: 'LS-Cache', callback: site.edit.ols_cache } : '';
             var menus = [
                 { title: lan.site.domain_man, callback: site.edit.set_domains },
                 { title: lan.site.site_menu_1, callback: site.edit.set_dirbind },

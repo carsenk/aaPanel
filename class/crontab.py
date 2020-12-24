@@ -4,7 +4,7 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2099 宝塔软件(http:#bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 黄文良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
 import public,db,os,time,re
 from BTPanel import session,cache
@@ -333,10 +333,14 @@ class crontab:
             shell=param.sFile
         else :
             head="#!/bin/bash\nPATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin\nexport PATH\n"
-            log='-access_log'
+
             python_bin = public.get_python_bin()
             if public.get_webserver()=='nginx':
                 log='.log'
+            elif public.get_webserver()=='apache':
+                log = '-access_log'
+            else:
+                log = '_ols.access_log'
             if type in ['site','path'] and param['sBody'] != 'undefined' and len(param['sBody']) > 1:
                 exports = param['sBody'].replace("\r\n","\n").replace("\n",",")
                 head += "BT_EXCLUDE=\"" + exports.strip() + "\"\nexport BT_EXCLUDE\n"

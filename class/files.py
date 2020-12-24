@@ -5,7 +5,7 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2016 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 黄文良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
 import sys
 import os
@@ -164,7 +164,7 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
     # 上传文件
     def UploadFile(self, get):
         from werkzeug.utils import secure_filename
-        from flask import request
+        from BTPanel import request
         if sys.version_info[0] == 2:
             get.path = get.path.encode('utf-8')
         if not os.path.exists(get.path):
@@ -195,6 +195,9 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
         if sys.version_info[0] == 2:
             args.f_name = args.f_name.encode('utf-8')
             args.f_path = args.f_path.encode('utf-8')
+
+        if args.f_path == '/':
+            return public.returnMsg(False,'Cannot upload files to the system root directory!')
 
         if args.f_name.find('./') != -1 or args.f_path.find('./') != -1:
             return public.returnMsg(False, 'Wrong parameter')
@@ -333,6 +336,8 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
                 try:
                     if sys.version_info[0] == 2:
                         filename = filename.encode('utf-8')
+                    else:
+                        filename.encode('utf-8')
                     filePath = get.path+'/'+filename
                     link = ''
                     if os.path.islink(filePath):
@@ -353,7 +358,7 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
                     size = str(stat.st_size)
                     if os.path.isdir(filePath):
                         dirnames.append(filename+';'+size+';' +
-                                        mtime+';'+accept+';'+user+';'+link + ';0;' + self.is_composer_json(filePath))
+                                        mtime+';'+accept+';'+user+';'+link + ';' +self.get_download_id(filePath)+';'+ self.is_composer_json(filePath))
                     else:
                         filenames.append(filename+';'+size+';'+mtime+';'+accept+';'+user+';'+link+';'+self.get_download_id(filePath))
                     n += 1
@@ -367,17 +372,17 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
             if get.reverse == 'False':
                 reverse = False
             for file_info in self.__list_dir(get.path, get.sort, reverse):
-                filename = os.path.join(get.path, file_info['name'])
-                if not os.path.exists(filename):
-                    continue
+                filename = os.path.join(get.path, file_info[0])
                 if search:
-                    if file_info['name'].lower().find(search) == -1:
+                    if file_info[0].lower().find(search) == -1:
                         continue
                 i += 1
                 if n >= page.ROW:
                     break
                 if i < page.SHIFT:
                     continue
+                if not os.path.exists(filename): continue
+                file_info = self.__format_stat(filename, get.path)
                 r_file = file_info['name'] + ';' + str(file_info['size']) + ';' + str(file_info['mtime']) + ';' + str(
                     file_info['accept']) + ';' + file_info['user'] + ';' + file_info['link']+';' + self.get_download_id(filename) + ';' + self.is_composer_json(filename)
                 if os.path.isdir(filename):
@@ -397,34 +402,46 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
         return data
 
     def __list_dir(self, path, my_sort='name', reverse=False):
+        '''
+            @name 获取文件列表，并排序
+            @author hwliang<2020-08-01>
+            @param path<string> 路径
+            @param my_sort<string> 排序字段
+            @param reverse<bool> 是否降序
+            @param list
+        '''
         if not os.path.exists(path):
             return []
         py_v = sys.version_info[0]
         tmp_files = []
-        tmp_dirs = []
+
         for f_name in os.listdir(path):
+            if py_v == 2:
+                f_name = f_name.encode('utf-8')
+
+            #使用.join拼接效率更高
+            filename = "/".join((path,f_name))
+            sort_key = 1
+            sort_val = None
+            #此处直接做异常处理比先判断文件是否存在更高效
             try:
-                if py_v == 2:
-                    f_name = f_name.encode('utf-8')
-                filename = os.path.join(path, f_name)
-                if not os.path.exists(filename):
-                    continue
-                file_info = self.__format_stat(filename, path)
-                if not file_info:
-                    continue
-                if os.path.isdir(filename):
-                    tmp_dirs.append(file_info)
-                else:
-                    tmp_files.append(file_info)
+                if my_sort == 'name':
+                    sort_key = 0
+                elif my_sort == 'size':
+                    sort_val = os.stat(filename).st_size
+                elif my_sort == 'mtime':
+                    sort_val =  os.stat(filename).st_mtime
+                elif my_sort == 'accept':
+                    sort_val = os.stat(filename).st_mode
+                elif my_sort == 'user':
+                    sort_val =  os.stat(filename).st_uid
             except:
                 continue
-        tmp_dirs = sorted(tmp_dirs, key=lambda x: x[my_sort], reverse=reverse)
-        tmp_files = sorted(
-            tmp_files, key=lambda x: x[my_sort], reverse=reverse)
+            #使用list[tuple]排序效率更高
+            tmp_files.append((f_name,sort_val))
 
-        for f in tmp_files:
-            tmp_dirs.append(f)
-        return tmp_dirs
+        tmp_files = sorted(tmp_files, key=lambda x: x[sort_key], reverse=reverse)
+        return tmp_files
 
     def __format_stat(self, filename, path):
         try:
@@ -501,6 +518,27 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
         if path and tmp_path != '/':
             filename = filename.replace(tmp_path, '')
         return filename + ';' + size + ';' + mtime + ';' + accept + ';' + user + ';' + link+';'+ down_url
+
+    #获取指定目录下的所有视频或音频文件
+    def get_videos(self,args):
+        path = args.path.strip()
+        v_data = []
+        if not os.path.exists(path): return v_data
+        import mimetypes
+        for fname in os.listdir(path):
+            try:
+                filename = os.path.join(path,fname)
+                if not os.path.exists(filename): continue
+                if not os.path.isfile(filename): continue
+                v_tmp = {}
+                v_tmp['name'] = fname
+                v_tmp['type'] = mimetypes.guess_type(filename)[0]
+                v_tmp['size'] = os.path.getsize(filename)
+                if not v_tmp['type'].split('/')[0] in ['video']:
+                    continue
+                v_data.append(v_tmp)
+            except:continue
+        return sorted(v_data,key=lambda x:x['name'])
 
     # 计算文件数量
     def GetFilesCount(self, path, search):
@@ -667,6 +705,10 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
             try:
                 tmp = {}
                 fname = rPath + file
+                if sys.version_info[0] == 2:
+                    fname = fname.encode('utf-8')
+                else:
+                    fname.encode('utf-8')
                 tmp1 = file.split('_bt_')
                 tmp2 = tmp1[len(tmp1)-1].split('_t_')
                 tmp['rname'] = file
@@ -893,7 +935,7 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
             return public.returnMsg(False,'The file format does not support online editing!')
         if os.path.getsize(get.path) > 3145928:
             return public.returnMsg(False,'CANT_EDIT_ONLINE_FILE')
-        if not os.path.isfile(get.path):
+        if os.path.isdir(get.path):
             return public.returnMsg(False,'This is not a file!')
         fp = open(get.path,'rb')
         data = {}
@@ -1329,7 +1371,7 @@ session.save_handler = files'''.format(path, sess_path, sess_path)
             shutil.move(sfile, dfile)
         else:
             self.copytree(sfile, dfile)
-            if os.path.exists(sfile):
+            if os.path.exists(sfile) and os.path.exists(dfile):
                 if is_dir:
                     shutil.rmtree(sfile)
                 else:
@@ -1716,27 +1758,27 @@ cd %s
         self.set_store_data(data)
         return public.returnMsg(True,'Successfully deleted!')
 
-    #单文件木马扫描
-    def file_webshell_check(self,get):
-        if not 'filename' in get: return public.returnMsg(True, 'file does not exist!')
-        import webshell_check
-        if webshell_check.webshell_check().upload_file_url(get.filename.strip()):
-            return public.returnMsg(False,'This file is webshell [ %s ]'%get.filename.strip().split('/')[-1])
-        else:
-            return public.returnMsg(True, 'no risk')
-
-    #目录扫描木马
-    def dir_webshell_check(self,get):
-        if not 'path' in get: return public.returnMsg(False, 'Please enter a valid directory!')
-        path=get.path.strip()
-        if os.path.exists(path):
-            #启动消息队列
-            exec_shell = public.get_python_bin() + ' /www/server/panel/class/webshell_check.py dir %s mail'%path
-            task_name = "Scan Trojan files for directory %s"%path
-            import panelTask
-            task_obj = panelTask.bt_task()
-            task_obj.create_task(task_name, 0, exec_shell)
-            return public.returnMsg(True, 'Starting Trojan killing process. Details will be in the panel security log')
+    # #单文件木马扫描
+    # def file_webshell_check(self,get):
+    #     if not 'filename' in get: return public.returnMsg(True, 'file does not exist!')
+    #     import webshell_check
+    #     if webshell_check.webshell_check().upload_file_url(get.filename.strip()):
+    #         return public.returnMsg(False,'This file is webshell [ %s ]'%get.filename.strip().split('/')[-1])
+    #     else:
+    #         return public.returnMsg(True, 'no risk')
+    #
+    # #目录扫描木马
+    # def dir_webshell_check(self,get):
+    #     if not 'path' in get: return public.returnMsg(False, 'Please enter a valid directory!')
+    #     path=get.path.strip()
+    #     if os.path.exists(path):
+    #         #启动消息队列
+    #         exec_shell = public.get_python_bin() + ' /www/server/panel/class/webshell_check.py dir %s mail'%path
+    #         task_name = "Scan Trojan files for directory %s"%path
+    #         import panelTask
+    #         task_obj = panelTask.bt_task()
+    #         task_obj.create_task(task_name, 0, exec_shell)
+    #         return public.returnMsg(True, 'Starting Trojan killing process. Details will be in the panel security log')
 
     # 获取下载地址列表
     def get_download_url_list(self, get):
@@ -1814,22 +1856,22 @@ cd %s
     # 生成下载地址
     def create_download_url(self, get):
         if not os.path.exists(get.filename):
-            return public.returnMsg(False, 'The specified file does not exist!')
-        if not os.path.isfile(get.filename):
-            return public.returnMsg(False, 'Cannot generate download address for directory!')
+            return public.returnMsg(False,'The specified file does not exist!')
         my_table = 'download_token'
         mtime = int(time.time())
         pdata = {
-            "filename": get.filename,  # 文件名
-            "token": public.GetRandomString(12),  # 12位随机密钥，用于URL
-            "expire": mtime + (int(get.expire) * 3600),  # 过期时间
-            "ps": get.ps,  # 备注
-            "total": 0,  # 下载计数
-            "password": get.password,  # 提取密码
-            "addtime": mtime  # 添加时间
+            "filename": get.filename,               #文件名
+            "token": public.GetRandomString(12),    #12位随机密钥，用于URL
+            "expire": mtime + (int(get.expire) * 3600), #过期时间
+            "ps":get.ps, #备注
+            "total":0,  #下载计数
+            "password":str(get.password), #提取密码
+            "addtime": mtime #添加时间
         }
-        # 更新 or 插入
-        token = public.M(my_table).where('filename=?', (get.filename,)).getField('token')
+        if len(pdata['password']) < 4 and len(pdata['password']) > 0:
+            return public.returnMsg(False,'The extract password length cannot be less than 4 bits')
+        #更新 or 插入
+        token = public.M(my_table).where('filename=?',(get.filename,)).getField('token')
         if token:
             return public.returnMsg(False, 'Already shared!')
             # pdata['token'] = token
@@ -1973,13 +2015,17 @@ cd %s
 
     # 操作数据库
     def _operate_db(self,q_sql,permissions_tb=None):
-        self._get_sqlite_connect()
-        c = self.sqlite_connection.cursor()
-        table = "index_tb"
-        if permissions_tb:
-            table = permissions_tb
-        sql_data = q_sql.replace("TB_NAME",table)
-        return c.execute(sql_data)
+        try:
+            self._get_sqlite_connect()
+            c = self.sqlite_connection.cursor()
+            table = "index_tb"
+            if permissions_tb:
+                table = permissions_tb
+            sql_data = q_sql.replace("TB_NAME",table)
+            return c.execute(sql_data)
+        except:
+            self._create_index_tb()
+            self._operate_db(q_sql,permissions_tb)
 
     # 判断文件个数
     def _get_file_total(self,path,num,date):
@@ -2009,6 +2055,18 @@ CREATE TABLE {}(
    date CHAR,
    type CHAR 
 );""".format(tb_name)
+        self.sqlite_connection.execute(sql)
+
+    def _create_index_tb(self):
+        self._get_sqlite_connect()
+        sql = """
+CREATE TABLE index_tb(
+   id INTEGER  PRIMARY KEY AUTOINCREMENT,
+   permissions_tb CHAR ,
+   date CHAR,
+   remark CHAR,
+   first_path CHAR
+);"""
         self.sqlite_connection.execute(sql)
 
     # 获取权限表名
@@ -2274,3 +2332,23 @@ CREATE TABLE {}(
             except:
                 print(public.get_error_info())
         return public.returnMsg(True,"Permission repair succeeded")
+
+    def restore_website(self,args):
+        """
+            @name 恢复站点文件
+            @author zhwen<zhw@bt.cn>
+            @parma file_name 备份得文件名
+            @parma site_id 网站id
+        """
+        import panel_restore
+        pr=panel_restore.panel_restore()
+        return pr.restore_website_backup(args)
+
+    def get_progress(self,args):
+        """
+            @name 获取进度日志
+            @author zhwen<zhw@bt.cn>
+        """
+        import panel_restore
+        pr=panel_restore.panel_restore()
+        return pr.get_progress(args)

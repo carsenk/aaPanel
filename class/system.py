@@ -4,7 +4,7 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2016 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 黄文良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
 import psutil,time,os,public,re,sys
 try:
@@ -12,19 +12,19 @@ try:
 except:
     pass
 class system:
-    setupPath = None;
+    setupPath = None
     ssh = None
     shell = None
     
     def __init__(self):
-        self.setupPath = public.GetConfigValue('setup_path');
+        self.setupPath = public.GetConfigValue('setup_path')
     
     def GetConcifInfo(self,get=None):
         #取环境配置信息
         if not 'config' in session:
-            session['config'] = public.M('config').where("id=?",('1',)).field('webserver,sites_path,backup_path,status,mysql_root').find();
+            session['config'] = public.M('config').where("id=?",('1',)).field('webserver,sites_path,backup_path,status,mysql_root').find()
         if not 'email' in session['config']:
-            session['config']['email'] = public.M('users').where("id=?",('1',)).getField('email');
+            session['config']['email'] = public.M('users').where("id=?",('1',)).getField('email')
         data = {}
         data = session['config']
         data['webserver'] = session['config']['webserver']
@@ -50,54 +50,74 @@ class system:
         serviceName = 'nginx'
         tmp['setup'] = False
         phpversion = "54"
-        phpport = '888';
-        pstatus = False;
-        pauth = False;
+        phpport = '888'
+        pstatus = False
+        pauth = False
         if os.path.exists(self.setupPath+'/nginx'): 
             data['webserver'] = 'nginx'
             serviceName = 'nginx'
-            tmp['setup'] = os.path.exists(self.setupPath +'/nginx/sbin/nginx');
-            configFile = self.setupPath + '/nginx/conf/nginx.conf';
+            tmp['setup'] = os.path.exists(self.setupPath +'/nginx/sbin/nginx')
+            configFile = self.setupPath + '/nginx/conf/nginx.conf'
             try:
                 if os.path.exists(configFile):
-                    conf = public.readFile(configFile);
-                    rep = "listen\s+([0-9]+)\s*;";
-                    rtmp = re.search(rep,conf);
+                    conf = public.readFile(configFile)
+                    rep = "listen\s+([0-9]+)\s*;"
+                    rtmp = re.search(rep,conf)
                     if rtmp:
-                        phpport = rtmp.groups()[0];
+                        phpport = rtmp.groups()[0]
                     
-                    if conf.find('AUTH_START') != -1: pauth = True;
-                    if conf.find(self.setupPath + '/stop') == -1: pstatus = True;
-                    configFile = self.setupPath + '/nginx/conf/enable-php.conf';
-                    conf = public.readFile(configFile);
-                    rep = "php-cgi-([0-9]+)\.sock";
-                    rtmp = re.search(rep,conf);
+                    if conf.find('AUTH_START') != -1: pauth = True
+                    if conf.find(self.setupPath + '/stop') == -1: pstatus = True
+                    configFile = self.setupPath + '/nginx/conf/enable-php.conf'
+                    conf = public.readFile(configFile)
+                    rep = "php-cgi-([0-9]+)\.sock"
+                    rtmp = re.search(rep,conf)
                     if rtmp:
-                        phpversion = rtmp.groups()[0];
+                        phpversion = rtmp.groups()[0]
             except:
-                pass;
+                pass
             
         elif os.path.exists(self.setupPath+'/apache'):
             data['webserver'] = 'apache'
             serviceName = 'httpd'
-            tmp['setup'] = os.path.exists(self.setupPath +'/apache/bin/httpd');
-            configFile = self.setupPath + '/apache/conf/extra/httpd-vhosts.conf';
+            tmp['setup'] = os.path.exists(self.setupPath +'/apache/bin/httpd')
+            configFile = self.setupPath + '/apache/conf/extra/httpd-vhosts.conf'
             try:
                 if os.path.exists(configFile):
-                    conf = public.readFile(configFile);
-                    rep = "php-cgi-([0-9]+)\.sock";
-                    rtmp = re.search(rep,conf);
+                    conf = public.readFile(configFile)
+                    rep = "php-cgi-([0-9]+)\.sock"
+                    rtmp = re.search(rep,conf)
                     if rtmp:
-                        phpversion = rtmp.groups()[0];
-                    rep = "Listen\s+([0-9]+)\s*\n";
-                    rtmp = re.search(rep,conf);
+                        phpversion = rtmp.groups()[0]
+                    rep = "Listen\s+([0-9]+)\s*\n"
+                    rtmp = re.search(rep,conf)
                     if rtmp:
-                        phpport = rtmp.groups()[0];
-                    if conf.find('AUTH_START') != -1: pauth = True;
-                    if conf.find(self.setupPath + '/stop') == -1: pstatus = True;
+                        phpport = rtmp.groups()[0]
+                    if conf.find('AUTH_START') != -1: pauth = True
+                    if conf.find(self.setupPath + '/stop') == -1: pstatus = True
             except:
                 pass
-                
+        elif os.path.exists('/usr/local/lsws/bin/lswsctrl'):
+            data['webserver'] = 'openlitespeed'
+            serviceName = 'openlitespeed'
+            tmp['setup'] = os.path.exists(self.setupPath +'/apache/bin/httpd')
+            configFile = '/usr/local/lsws/bin/lswsctrl'
+            try:
+                if os.path.exists(configFile):
+                    conf = public.readFile('/www/server/panel/vhost/openlitespeed/detail/phpmyadmin.conf')
+                    rep = "/usr/local/lsws/lsphp(\d+)/bin/lsphp"
+                    rtmp = re.search(rep,conf)
+                    if rtmp:
+                        phpversion = rtmp.groups()[0]
+                    conf = public.readFile('/www/server/panel/vhost/openlitespeed/listen/888.conf')
+                    rep = "address\s+\*\:(\d+)"
+                    rtmp = re.search(rep,conf)
+                    if rtmp:
+                        phpport = rtmp.groups()[0]
+                    if conf.find('AUTH_START') != -1: pauth = True
+                    if conf.find(self.setupPath + '/stop') == -1: pstatus = True
+            except:
+                pass
                 
         tmp['type'] = data['webserver']
         tmp['version'] = public.readFile(self.setupPath + '/'+data['webserver']+'/version.pl');
@@ -228,7 +248,10 @@ class system:
         return data
     
     def GetLoadAverage(self,get):
-        c = os.getloadavg()
+        try:
+            c = os.getloadavg()
+        except:
+            c = [0,0,0]
         data = {};
         data['one'] = float(c[0]);
         data['five'] = float(c[1]);
@@ -340,7 +363,7 @@ class system:
         #取磁盘分区信息
         diskIo = psutil.disk_partitions()
         diskInfo = []
-        cuts = ['/mnt/cdrom','/boot','/boot/efi','/dev','/dev/shm','/run/lock','/run','/run/shm','/run/user'];
+        cuts = ['/mnt/cdrom','/boot','/boot/efi','/dev','/dev/shm','/run/lock','/run','/run/shm','/run/user']
         for disk in diskIo:
             if not cuts: continue
             tmp = {}
@@ -351,8 +374,8 @@ class system:
 
     def GetDiskInfo2(self):
         #取磁盘分区信息
-        temp = public.ExecShell("df -hT -P|grep '/'|grep -v tmpfs")[0]
-        tempInodes = public.ExecShell("df -i -P|grep '/'|grep -v tmpfs")[0]
+        temp = public.ExecShell("df -hT -P|grep '/'|grep -v tmpfs|grep -v 'snap/core'|grep -v udev")[0]
+        tempInodes = public.ExecShell("df -i -P|grep '/'|grep -v tmpfs|grep -v 'snap/core'|grep -v udev")[0]
         temp1 = temp.split('\n')
         tempInodes1 = tempInodes.split('\n')
         diskInfo = []
@@ -457,10 +480,16 @@ class system:
             
         ntime = time.time()
         networkInfo = {}
+        up = cache.get('up')
+        down = cache.get('down')
+        if not up:
+            up = networkIo[0]
+        if not down:
+            down = networkIo[1]
         networkInfo['upTotal']   = networkIo[0]
         networkInfo['downTotal'] = networkIo[1]
-        networkInfo['up']        = round(float(networkIo[0] -  cache.get("up")) / 1024 / (ntime - otime),2)
-        networkInfo['down']      = round(float(networkIo[1] -  cache.get("down")) / 1024 / (ntime -  otime),2)
+        networkInfo['up']        = round(float(networkIo[0] -  up) / 1024 / (ntime - otime),2)
+        networkInfo['down']      = round(float(networkIo[1] - down) / 1024 / (ntime -  otime),2)
         networkInfo['downPackets'] =networkIo[3]
         networkInfo['upPackets']   =networkIo[2]
             

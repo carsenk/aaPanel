@@ -4,7 +4,7 @@
 #-------------------------------------------------------------------
 # Copyright (c) 2015-2099 宝塔软件(http://bt.cn) All rights reserved.
 #-------------------------------------------------------------------
-# Author: 黄文良 <287962566@qq.com>
+# Author: hwliang <hwl@bt.cn>
 #-------------------------------------------------------------------
 
 #------------------------------
@@ -19,7 +19,7 @@ import time
 os.chdir('/www/server/panel')
 sys.path.insert(0,'class/')
 import public
-_VERSION = 1.3
+_VERSION = 1.5
 
 class backup:
     _path = None
@@ -28,8 +28,7 @@ class backup:
     _inode_min = 10
     _db_mysql = None
     _cloud = None
-    _local_backdir = None
-    _is_save_local = not os.path.exists('data/is_save_local_backup.pl')
+    _is_save_local = os.path.exists('data/is_save_local_backup.pl')
     def __init__(self,cloud_object = None):
         '''
             @name 数据备份对象
@@ -77,8 +76,8 @@ class backup:
 
     def GetDiskInfo2(self):
         #取磁盘分区信息
-        temp = public.ExecShell("df -T -P|grep '/'|grep -v tmpfs")[0]
-        tempInodes = public.ExecShell("df -i -P|grep '/'|grep -v tmpfs|grep -v '/boot'")[0]
+        temp = public.ExecShell("df -T -P|grep '/'|grep -v tmpfs|grep -v 'snap/core'|grep -v udev")[0]
+        tempInodes = public.ExecShell("df -i -P|grep '/'|grep -v tmpfs|grep -v 'snap/core'|grep -v udev")[0]
         temp1 = temp.split('\n')
         tempInodes1 = tempInodes.split('\n')
         diskInfo = []
@@ -196,7 +195,7 @@ class backup:
         num = len(backups) - int(save)
         if  num > 0:
             self._get_local_backdir()
-            self.echo_info('-' * 90)
+            self.echo_info('-' * 88)
             for backup in backups:
                 #处理目录备份到远程的情况
                 if backup['filename'].find('|') != -1:
@@ -305,7 +304,7 @@ class backup:
 
         filename = dfile
         if self._cloud:
-            filename = self._cloud._name
+            filename = dfile + '|' + self._cloud._name + '|' + fname
 
         pdata = {
             'type': 0,
@@ -324,9 +323,9 @@ class backup:
 
         #清理多余备份
         if not self._cloud:
-            backups = public.M('backup').where("type=? and pid=? and filename LIKE '%/%'",('0',pid)).field('id,name,filename').select()
+            backups = public.M('backup').where("type=? and pid=? and filename NOT LIKE '%|%'",('0',pid)).field('id,name,filename').select()
         else:
-            backups = public.M('backup').where('type=? and pid=? and filename=?',('0',pid,filename)).field('id,name,filename').select()
+            backups = public.M('backup').where('type=? and pid=? and filename LIKE "%{}%"'.format(self._cloud._name),('0',pid)).field('id,name,filename').select()
 
         self.delete_old(backups,save,'site')
         self.echo_end()
@@ -425,7 +424,7 @@ class backup:
 
         filename = dfile
         if self._cloud:
-            filename = self._cloud._name
+            filename = dfile + '|' + self._cloud._name + '|' + fname
         self.echo_info("Database has been backed up to: {}".format(dfile))
         if os.path.exists(self._err_log):
             os.remove(self._err_log)
@@ -450,11 +449,9 @@ class backup:
 
         #清理多余备份
         if not self._cloud:
-            backups = public.M('backup').where("type=? and pid=? and filename LIKE '%/%'",('1',pid)).field('id,name,filename').select()
+            backups = public.M('backup').where("type=? and pid=? and filename NOT LIKE '%|%'",('1',pid)).field('id,name,filename').select()
         else:
-            backups = public.M('backup').where('type=? and pid=? and filename=?',('1',pid,filename)).field('id,name,filename').select()
-
-        self.echo_info(str(backups))
+            backups = public.M('backup').where('type=? and pid=? and filename LIKE "%{}%"'.format(self._cloud._name),('1',pid)).field('id,name,filename').select()
         self.delete_old(backups,save,'database')
         self.echo_end()
         return dfile

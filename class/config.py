@@ -4,7 +4,7 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2017 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 黄文良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
 import public,re,sys,os,nginx,apache,json,time,ols
 try:
@@ -12,8 +12,7 @@ try:
 except:
     public.ExecShell("pip install pyotp &")
 try:
-    from BTPanel import session,admin_path_checks
-    from flask import request
+    from BTPanel import session,admin_path_checks,g,request
     import send_mail
 except:pass
 class config:
@@ -59,7 +58,7 @@ class config:
     #添加接受邮件地址
     def add_mail_address(self, get):
         if not hasattr(get, 'email'): return public.returnMsg(False, 'Please input your email')
-        emailformat = re.compile('[a-zA-Z0-9.-_+%]+@[a-zA-Z0-9]+\.[a-zA-Z0-9]+')
+        emailformat = re.compile(r'[a-zA-Z0-9.-_+%]+@[a-zA-Z0-9]+\.[a-zA-Z0-9]+')
         if not emailformat.search(get.email): return public.returnMsg(False, 'Please enter your vaild email')
         # 测试发送邮件
         if get.email.strip() in self.__mail_list: return public.returnMsg(True, 'Email already exists')
@@ -96,7 +95,7 @@ class config:
     # 用户自定义邮件发送
     def user_stmp_mail_send(self, get):
         if not (hasattr(get, 'email')): return public.returnMsg(False, 'Please fill in the email address')
-        emailformat = re.compile('[a-zA-Z0-9.-_+%]+@[a-zA-Z0-9]+\.[a-zA-Z0-9]+')
+        emailformat = re.compile(r'[a-zA-Z0-9.-_+%]+@[a-zA-Z0-9]+\.[a-zA-Z0-9]+')
         if not emailformat.search(get.email): return public.returnMsg(False, 'Please enter your vaild email')
         # 测试发送邮件
         if not get.email.strip() in self.__mail_list: return public.returnMsg(True, 'The mailbox does not exist, please add it to the mailbox list')
@@ -168,12 +167,45 @@ class config:
         userInfo = public.M('users').where("id=?",(1,)).field('username,password').find()
         token = public.Md5(userInfo['username'] + '/' + userInfo['password'])
         public.writeFile('/www/server/panel/data/login_token.pl',token)
+
+        sess_path = 'data/sess_files'
+        if not os.path.exists(sess_path):
+            os.makedirs(sess_path,384)
+        self.clean_sess_files(sess_path)
+        sess_key = public.get_sess_key()
+        sess_file = os.path.join(sess_path,sess_key)
+        public.writeFile(sess_file,str(int(time.time()+86400)))
+        public.set_mode(sess_file,'600')
         session['login_token'] = token
+
+    def clean_sess_files(self,sess_path):
+        '''
+            @name 清理过期的sess_file
+            @auther hwliang<2020-07-25>
+            @param sess_path(string) sess_files目录
+            @return void
+        '''
+        s_time = time.time()
+        for fname in os.listdir(sess_path):
+            try:
+                if len(fname) != 32: continue
+                sess_file = os.path.join(sess_path,fname)
+                if not os.path.isfile(sess_file): continue
+                sess_tmp = public.ReadFile(sess_file)
+                if not sess_tmp:
+                    if os.path.exists(sess_file):
+                        os.remove(sess_file)
+                if s_time > int(sess_tmp):
+                    os.remove(sess_file)
+            except:
+                pass
+
+
 
     def setPassword(self,get):
         if get.password1 != get.password2: return public.returnMsg(False,'USER_PASSWORD_CHECK')
         if len(get.password1) < 5: return public.returnMsg(False,'USER_PASSWORD_LEN')
-        public.M('users').where("username=?",(session['username'],)).setField('password',public.md5(get.password1.strip()))
+        public.M('users').where("username=?",(session['username'],)).setField('password',public.password_salt(public.md5(get.password1.strip()),username=session['username']))
         public.WriteLog('TYPE_PANEL','USER_PASSWORD_SUCCESS',(session['username'],))
         self.reload_session()
         return public.returnMsg(True,'USER_PASSWORD_SUCCESS')
@@ -189,7 +221,7 @@ class config:
 
     #取用户列表
     def get_users(self,args):
-        data = public.M('users').field('username').select()
+        data = public.M('users').field('id,username').select()
         return data
 
     # 创建新用户
@@ -199,7 +231,7 @@ class config:
         if len(args.password) < 8: return public.returnMsg(False,'Password must be at least 8 characters')
         pdata = {
             "username": args.username.strip(),
-            "password": public.md5(args.password.strip())
+            "password": public.password_salt(public.md5(args.password.strip()),username=args.username.strip())
         }
 
         if(public.M('users').where('username=?',(pdata['username'],)).count()):
@@ -233,7 +265,7 @@ class config:
         if 'password' in args:
             if args.password:
                 if len(args.password) < 8: return public.returnMsg(False,'Password must be at least 8 characters')
-                pdata['password'] = public.md5(args.password.strip())
+                pdata['password'] = public.password_salt(public.md5(args.password.strip()),username=username)
 
         if(public.M('users').where('id=?',(args.id,)).update(pdata)):
             public.WriteLog('User Management',"Edit user{}".format(username))
@@ -415,6 +447,8 @@ class config:
             ols_php_path = '/usr/local/lsws/lsphp' + get.version + '/etc/php.ini'
         if not os.path.exists(filename): return public.returnMsg(False,'PHP_NOT_EXISTS')
         for file in [filename,ols_php_path]:
+            if not os.path.exists(file):
+                continue
             phpini = public.readFile(file)
             rep = r"disable_functions\s*=\s*.*\n"
             phpini = re.sub(rep, 'disable_functions = ' + get.disable_functions + "\n", phpini)
@@ -649,8 +683,8 @@ class config:
     #设置面板SSL
     def SetPanelSSL(self,get):
         if hasattr(get,"email"):
-            # rep_mail = "^[a-zA-Z0-9_-\.]+@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$"
-            rep_mail = "[\w!#$%&'*+/=?^_`{|}~-]+(?:\.[\w!#$%&'*+/=?^_`{|}~-]+)*@(?:[\w](?:[\w-]*[\w])?\.)+[\w](?:[\w-]*[\w])?"
+            #rep_mail = "^[a-zA-Z0-9_-]+@[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$"
+            rep_mail = r"[\w!#$%&'*+/=?^_`{|}~-]+(?:\.[\w!#$%&'*+/=?^_`{|}~-]+)*@(?:[\w](?:[\w-]*[\w])?\.)+[\w](?:[\w-]*[\w])?"
             if not re.search(rep_mail,get.email):
                 return public.returnMsg(False,'The E-Mail format is illegal')
             import setPanelLets
@@ -835,7 +869,7 @@ class config:
         ols_php_path = '/usr/local/lsws/lsphp{}/etc/php/{}.{}/litespeed/php.ini'.format(get.version, get.version[0],get.version[1])
         if os.path.exists('/etc/redhat-release'):
             ols_php_path = '/usr/local/lsws/lsphp' + get.version + '/etc/php.ini'
-        reload_ols_str = '/usr/local/lsws/bin/lswsctl reload'
+        reload_ols_str = '/usr/local/lsws/bin/lswsctrl restart'
         for p in [filename,ols_php_path]:
             if not p:
                 continue
@@ -1039,8 +1073,11 @@ class config:
 
     #获取配置
     def get_config(self,get):
-        if 'config' in session: return session['config']
+        if 'config' in session:
+            session['config']['distribution'] = public.get_linux_distribution()
+            return session['config']
         data = public.M('config').where("id=?",('1',)).field('webserver,sites_path,backup_path,status,mysql_root').find()
+        data['distribution'] = public.get_linux_distribution()
         return data
 
 

@@ -138,8 +138,8 @@ var aceEditor = {
         $('.ace_conter_menu').on('click', '.item .icon-tool', function(e) {
             var file_type = $(this).attr('data-file-state');
             var file_title = $(this).attr('data-title');
-            var _path = $(this).parent().attr('title');
-            var _id = $(this).parent().attr('data-id');
+            var _path = $(this).parent().parent().attr('title');
+            var _id = $(this).parent().parent().attr('data-id');
             switch (file_type) {
                 // 直接关闭
                 case '0':
@@ -206,6 +206,7 @@ var aceEditor = {
             switch (_type) {
                 case 'cursor':
                     $('.ace_toolbar_menu').hide();
+                    $('.ace_header .jumpLine').click();
                     break;
                 case 'history':
                     $('.ace_toolbar_menu').hide();
@@ -282,12 +283,19 @@ var aceEditor = {
             var _val = $(this).attr('data-value'),
                 _item = _this.editor['ace_editor_' + _this.ace_active];
             if ($(this).parent().hasClass('tabsType')) {
-                _item.ace.getSession().setUseSoftTabs(_val == 'nbsp');
+                //_item.ace.getSession().setUseSoftTabs(_val == 'nbsp');
+                _this.aceConfig.aceEditor.useSoftTabs = _val == 'nbsp';
                 _item.softTabs = _val == 'nbsp';
             } else {
-                _item.ace.getSession().setTabSize(_val);
+                //_item.ace.getSession().setTabSize(_val);
+                _this.aceConfig.aceEditor.tabSize = _val;
                 _item.tabSize = _val;
             }
+            _this.saveAceConfig(_this.aceConfig,function(res){
+                if(res.status){
+                    layer.msg('Successful setup', {icon: 1});
+                }
+            });
             $(this).siblings().removeClass('active').find('.icon').remove();
             $(this).addClass('active').append(_icon);
             _this.currentStatusBar(_item.id);
@@ -379,7 +387,7 @@ var aceEditor = {
                     }
                     var loadT = layer.open({
                         type: 1,
-                        area: ['350px', '180px'],
+                        //area: ['350px', '180px'],
                         title: 'Tips',
                         content: '<div class="ace-clear-form">\
 							<div class="clear-icon"></div>\
@@ -476,10 +484,9 @@ var aceEditor = {
                     //主题
                 case 'themes':
                     $('.ace_toolbar_menu').show().find('.menu-themes').show().siblings().hide();
-                    var _html = '',
-                        _arry = ['White', 'Black'];
+                    var _html = '',_arry = ['White', 'Black'];
                     for (var i = 0; i < _this.themeList.length; i++) {
-                        if (_this.aceConfig.themeList[i] != _this.aceConfig.aceEditor.editorTheme) {
+                        if (_this.themeList[i] != _this.aceConfig.aceEditor.editorTheme) {
                             _html += '<li data-value="' + _this.themeList[i] + '">' + _this.themeList[i] + '【' + _arry[i] + '】</li>';
                         } else {
                             _html += '<li data-value="' + _this.themeList[i] + '" class="active">' + _this.themeList[i] + '【' + _arry[i] + '】' + _icon + '</li>';
@@ -489,7 +496,7 @@ var aceEditor = {
                     $('.menu-themes ul li').click(function(){
 						var _theme = $(this).attr('data-value');
                         $(this).addClass('active').append(_icon).siblings().removeClass('active').find('.icon').remove();
-						_this.aceConfig.aceEditor.editorTheme = _theme;
+                        _this.aceConfig.aceEditor.editorTheme = _theme;
 						_this.saveAceConfig(_this.aceConfig,function(res){
 							for(var item in _this.editor){
 								_this.editor[item].ace.setTheme("ace/theme/"+_theme);
@@ -651,7 +658,7 @@ var aceEditor = {
 		$('.ace_dir_tools').on('click','.upper_level',function(){
 			var _paths = $(this).attr('data-menu-path');
 			_this.reader_file_dir_menu({path:_paths,is_empty:true});
-			$('.ace_catalogue_title').html('目录：'+ _paths).attr('title',_paths);
+			$('.ace_catalogue_title').html('Directory: '+ _paths).attr('title',_paths);
 		});
 		// 新建文件（文件目录主菜单）
 		$('.ace_dir_tools').on('click','.new_folder',function(e){
@@ -850,7 +857,6 @@ var aceEditor = {
             } else if ($(this).prev().attr('data-type') === 0) {
                 return false;
             }
-            console.log(_type)
             switch (_type) {
                 case 0: //新建文件夹
                     _this.event_create_dir({ path: _path + '/' + _file_or_dir });
@@ -1175,7 +1181,7 @@ var aceEditor = {
             _this = this;
         var loadT = layer.open({
             type: 1,
-            area: ['400px', '180px'],
+            //area: ['400px', '180px'],
             title: lan.public.restore_history_files,
             content: '<div class="ace-clear-form">\
 				<div class="clear-icon"></div>\
@@ -1483,6 +1489,28 @@ var aceEditor = {
         }
         _editor.ace.resize();
     },
+    // currentStatusBar: function(id) {
+    //     var _item = this.editor['ace_editor_' + id];
+	// 	if(_item == undefined){
+	// 		this.removerStatusBar();
+	// 		return false;
+	// 	}
+    //     $('.ace_conter_toolbar [data-type="cursor"]').html(lan.public.row + '<i class="cursor-row">1</i>,'+ lan.public.column +'<i class="cursor-line">0</i>');
+    //     $('.ace_conter_toolbar [data-type="history"]').html(lan.public.history_v + ': <i>' + (_item.historys.length === 0 ? lan.public.empty : _item.historys.length) + '</i>');
+    //     $('.ace_conter_toolbar [data-type="path"]').html(lan.public.dir + ': <i title="' + _item.path + '">' + _item.path + '</i>');
+    //     $('.ace_conter_toolbar [data-type="tab"]').html(_item.softTabs ? lan.public.space + ': <i>' + _item.tabSize + '</i>' : lan.public.tab_length + ': <i>' + _item.tabSize + '</i>');
+    //     $('.ace_conter_toolbar [data-type="encoding"]').html(lan.public.encoding + ': <i>' + _item.encoding.toUpperCase() + '</i>');
+    //     $('.ace_conter_toolbar [data-type="lang"]').html(lan.public.lan + ': <i>' + _item.type + '</i>');
+    //     $('.ace_conter_toolbar span').attr('data-id', id);
+    //     $('.file_fold').removeClass('bg');
+    //     $('[data-menu-path="' + (_item.path) + '"]').find('.file_fold').addClass('bg');
+    //     if (_item.historys_file) {
+    //         $('.ace_conter_toolbar [data-type="history"]').hide();
+    //     } else {
+    //         $('.ace_conter_toolbar [data-type="history"]').show();
+    //     }
+    //     _item.ace.resize();
+    // },
     // 清除状态栏
     removerStatusBar: function() {
         $('.ace_conter_toolbar [data-type="history"]').html('');
@@ -1588,53 +1616,74 @@ var aceEditor = {
         return { name: 'Text', mode: 'text' };
     },
     // 新建编辑器视图-方法
-    addEditorView: function() {
-        var _index = this.editorLength,
-            _id = bt.get_random(8);
-        $('.ace_conter_menu .item').removeClass('active');
-        $('.ace_conter_editor .ace_editors').removeClass('active');
-        $('.ace_conter_menu .ace_editor_add').before('<div class="item active item_tab_' + _id + '" data-type="text" data-id="' + _id + '" data-index="' + _index + '">\
-			<span class="icon_file"><i class="fa fa-code" aria-hidden="true"></i></span>\
-			<span>Untitled-' + _index + '</span>\
-			<i class="fa fa-circle icon-tool" aria-hidden="true" data-file-state="1" data-title="Untitled-' + _index + '"></i>\
-		</div>');
-        $('.ace_conter_editor').append('<div id="ace_editor_' + _id + '" class="ace_editors active"></div>');
-        $('#ace_editor_' + _id).siblings().removeClass('active');
-        this.creationEditor({ id: _id });
-        this.editorLength = this.editorLength + 1;
-    },
+    // addEditorView: function() {
+    //     var _index = this.editorLength,
+    //         _id = bt.get_random(8);
+    //     $('.ace_conter_menu .item').removeClass('active');
+    //     $('.ace_conter_editor .ace_editors').removeClass('active');
+    //     $('.ace_conter_menu .ace_editor_add').before('<div class="item active item_tab_' + _id + '" data-type="text" data-id="' + _id + '" data-index="' + _index + '">\
+	// 		<span class="icon_file"><i class="fa fa-code" aria-hidden="true"></i></span>\
+	// 		<span>Untitled-' + _index + '</span>\
+	// 		<i class="fa fa-circle icon-tool" aria-hidden="true" data-file-state="1" data-title="Untitled-' + _index + '"></i>\
+	// 	</div>');
+    //     $('.ace_conter_editor').append('<div id="ace_editor_' + _id + '" class="ace_editors active"></div>');
+    //     $('#ace_editor_' + _id).siblings().removeClass('active');
+    //     this.creationEditor({ id: _id });
+    //     this.editorLength = this.editorLength + 1;
+    // },
+    addEditorView: function (type,conifg) {
+		if(type == undefined) type = 0
+		var _index = this.editorLength,_id = bt.get_random(8);
+		$('.ace_conter_menu .item').removeClass('active');
+		$('.ace_conter_editor .ace_editors').removeClass('active');
+		$('.ace_conter_menu').append('<li class="item active item_tab_'+_id+'" data-type="shortcutKeys" data-id="'+ _id +'" >\
+			<div class="ace_item_box">\
+				<span class="icon_file"><i class="text-icon"></i></span>\
+				<span>'+ (type?conifg.title:('Untitled-'+ _index)) +'</span>\
+				<i class="glyphicon icon-tool glyphicon-remove" aria-hidden="true" data-file-state="0" data-title="'+ (type?conifg.title:('Untitled-'+ _index)) +'"></i>\
+			</div>\
+		</li>');
+		$('#ace_editor_' + _id).siblings().removeClass('active');
+		$('.ace_conter_editor').append('<div id="ace_editor_'+_id+'" class="ace_editors active">'+ (type?aceShortcutKeys.innerHTML:'') +'</div>');
+		switch(type){
+			case 0:
+				this.creationEditor({ id: _id });
+				this.editorLength = this.editorLength + 1;
+			break;
+			case 1:
+				this.removerStatusBar();
+				this.editorLength = this.editorLength + 1;
+			break;
+		}
+	},
     // 删除编辑器视图-方法
-    removeEditor: function(id) {
-        if ($('.item_tab_' + id).next('.item').length == 0) {
-            $('.item_tab_' + id).prev('.item').addClass('active');
-            $('#ace_editor_' + id).prev('.ace_editor').addClass('active');
-            this.ace_active = $('.item_tab_' + id).prev('.item').attr('data-id');
-        } else {
-            $('.item_tab_' + id).next('.item').addClass('active');
-            $('#ace_editor_' + id).next('.ace_editor').addClass('active');
-            this.ace_active = $('.item_tab_' + id).next('.item').attr('data-id');
+    removeEditor: function (id) {
+        if(id == undefined) id = this.ace_active;
+		if ($('.item_tab_' + id).next('.item').length != 0 && this.editorLength != 1) {
+			$('.item_tab_' + id).next('.item').click();
+		} else if($('.item_tab_' + id).prev('.item').length !=  0 && this.editorLength != 1){
+			$('.item_tab_' + id).prev('.item').click();
         }
-        $('.item_tab_' + id).remove();
-        $('#ace_editor_' + id).remove();
-        for (var i = 0; i < this.pathAarry.length; i++) {
-            if (this.pathAarry[i] == this.editor['ace_editor_' + id].path) {
-                this.pathAarry.splice(i, 1);
-            }
+		$('.item_tab_' + id).remove();
+		$('#ace_editor_' + id).remove();
+		this.editorLength --;
+		if(this.editor['ace_editor_'+id] == undefined) return false;
+		for(var i=0;i<this.pathAarry.length;i++){
+		    if(this.pathAarry[i] == this.editor['ace_editor_'+id].path){
+		        this.pathAarry.splice(i,1);
+		    }
+		}
+		if(!this.editor['ace_editor_'+id].historys_file) $('[data-menu-path="'+ (this.editor['ace_editor_'+id].path) +'"]').find('.file_fold').removeClass('active bg');
+        delete this.editor['ace_editor_'+id];
+		if(this.editorLength === 0){
+			this.ace_active = '';
+			this.pathAarry = [];
+			this.removerStatusBar();
+		}else{
+			this.currentStatusBar(this.ace_active);
         }
-        if (!aceEditor.editor['ace_editor_' + id].historys_file) $('[data-menu-path="' + (aceEditor.editor['ace_editor_' + id].path) + '"]').find('.file_fold').removeClass('active bg');
-        delete this.editor['ace_editor_' + id];
-        this.editorLength--;
-        if (this.editorLength === 0) {
-            this.ace_active = '';
-            this.pathAarry = [];
-            this.removerStatusBar();
-        } else {
-            this.currentStatusBar(this.ace_active);
-        }
-        if (this.ace_active != '') {
-            this.is_file_history(this.editor['ace_editor_' + this.ace_active]);
-        }
-    },
+		if(this.ace_active != '') this.is_file_history(this.editor['ace_editor_'+this.ace_active]);
+	},
     // 打开历史文件文件-方法
 	openHistoryEditorView: function (obj,callback) {
 		// 文件类型（type，列如：JavaScript） 、文件模型（mode，列如：text）、文件标识（id,列如：x8AmsnYn）、文件编号（index,列如：0）、文件路径 (path，列如：/www/root/)
@@ -1658,40 +1707,69 @@ var aceEditor = {
 		});
 	},
     // 打开编辑器文件-方法
-    openEditorView: function(path, callback) {
-        if (path == undefined) return false;
-        // 文件类型（type，列如：JavaScript） 、文件模型（mode，列如：text）、文件标识（id,列如：x8AmsnYn）、文件编号（index,列如：0）、文件路径 (path，列如：/www/root/)
-        var _this = this,
-            paths = path.split('/'),
-            _fileName = paths[paths.length - 1],
-            _fileType = this.getFileType(_fileName),
-            _type = _fileType.name,
-            _mode = _fileType.mode,
-            _id = bt.get_random(8),
-            _index = this.editorLength;
-        _this.is_file_open(path, function(is_state) {
-            if (is_state) {
-                $('.ace_conter_menu').find('[title="' + path + '"]').click();
-            } else {
-                _this.getFileBody({ path: path }, function(res) {
-                    _this.pathAarry.push(path);
-                    $('.ace_conter_menu .item').removeClass('active');
-                    $('.ace_conter_editor .ace_editors').removeClass('active');
-                    $('.ace_conter_menu .ace_editor_add').before('<div class="item active item_tab_' + _id + '" title="' + path + '" data-type="' + _type + '" data-mode="' + _mode + '" data-id="' + _id + '" data-index="' + _index + '" data-fileName="' + _fileName + '">\
-		    			<span class="icon_file"><i class="' + _mode + '-icon"></i></span><span title="' + path + '">' + _fileName + '</span>\
-		    			<i class="glyphicon glyphicon-remove icon-tool" aria-hidden="true" data-file-state="0" data-title="' + _fileName + '"></i>\
-		    		</div>');
-                    $('.ace_conter_editor').append('<div id="ace_editor_' + _id + '" class="ace_editors active"></div>');
-                    $('[data-menu-path="' + path + '"]').find('.file_fold').addClass('active bg');
-                    _this.ace_active = _id;
-                    _this.editorLength = _this.editorLength + 1;
-                    _this.creationEditor({ id: _id, fileName: _fileName, path: path, mode: _mode, encoding: res.encoding, data: res.data, type: _type, historys: res.historys });
-                    if (callback) callback(res);
-                });
-            }
-        });
-        $('.ace_toolbar_menu').hide();
-    },
+    // openEditorView: function(path, callback) {
+    //     if (path == undefined) return false;
+    //     // 文件类型（type，列如：JavaScript） 、文件模型（mode，列如：text）、文件标识（id,列如：x8AmsnYn）、文件编号（index,列如：0）、文件路径 (path，列如：/www/root/)
+    //     var _this = this,
+    //         paths = path.split('/'),
+    //         _fileName = paths[paths.length - 1],
+    //         _fileType = this.getFileType(_fileName),
+    //         _type = _fileType.name,
+    //         _mode = _fileType.mode,
+    //         _id = bt.get_random(8),
+    //         _index = this.editorLength;
+    //     _this.is_file_open(path, function(is_state) {
+    //         if (is_state) {
+    //             $('.ace_conter_menu').find('[title="' + path + '"]').click();
+    //         } else {
+    //             _this.getFileBody({ path: path }, function(res) {
+    //                 _this.pathAarry.push(path);
+    //                 $('.ace_conter_menu .item').removeClass('active');
+    //                 $('.ace_conter_editor .ace_editors').removeClass('active');
+    //                 $('.ace_conter_menu .ace_editor_add').before('<div class="item active item_tab_' + _id + '" title="' + path + '" data-type="' + _type + '" data-mode="' + _mode + '" data-id="' + _id + '" data-index="' + _index + '" data-fileName="' + _fileName + '">\
+	// 	    			<span class="icon_file"><i class="' + _mode + '-icon"></i></span><span title="' + path + '">' + _fileName + '</span>\
+	// 	    			<i class="glyphicon glyphicon-remove icon-tool" aria-hidden="true" data-file-state="0" data-title="' + _fileName + '"></i>\
+	// 	    		</div>');
+    //                 $('.ace_conter_editor').append('<div id="ace_editor_' + _id + '" class="ace_editors active"></div>');
+    //                 $('[data-menu-path="' + path + '"]').find('.file_fold').addClass('active bg');
+    //                 _this.ace_active = _id;
+    //                 _this.editorLength = _this.editorLength + 1;
+    //                 _this.creationEditor({ id: _id, fileName: _fileName, path: path, mode: _mode, encoding: res.encoding, data: res.data, type: _type, historys: res.historys });
+    //                 if (callback) callback(res);
+    //             });
+    //         }
+    //     });
+    //     $('.ace_toolbar_menu').hide();
+    // },
+    openEditorView: function (path,callback) {
+		if(path == undefined) return false;
+		// 文件类型（type，列如：JavaScript） 、文件模型（mode，列如：text）、文件标识（id,列如：x8AmsnYn）、文件编号（index,列如：0）、文件路径 (path，列如：/www/root/)
+	    var _this = this,paths = path.split('/'),_fileName = paths[paths.length - 1],_fileType = this.getFileType(_fileName),_type = _fileType.name,_mode = _fileType.mode,_id = bt.get_random(8),_index = this.editorLength;
+		_this.is_file_open(path,function(is_state){
+			if(is_state){
+				$('.ace_conter_menu').find('[title="'+ path +'"]').click();
+			}else{
+				_this.getFileBody({path: path}, function (res) {
+				    _this.pathAarry.push(path);
+				    $('.ace_conter_menu .item').removeClass('active');
+		    		$('.ace_conter_editor .ace_editors').removeClass('active');
+		    		$('.ace_conter_menu').append('<li class="item active item_tab_' + _id +'" title="'+ path +'" data-type="'+ _type +'" data-mode="'+ _mode +'" data-id="'+ _id +'" data-fileName="'+ _fileName +'">'+
+		    			'<div class="ace_item_box">'+
+			    			'<span class="icon_file"><i class="'+ _mode +'-icon"></i></span><span title="'+ path +'">' + _fileName + '</span>'+
+			    			'<i class="glyphicon glyphicon-remove icon-tool" aria-hidden="true" data-file-state="0" data-title="' + _fileName + '"></i>'+
+			    		'</div>'+
+		    		'</li>');
+		    		$('.ace_conter_editor').append('<div id="ace_editor_'+_id +'" class="ace_editors active" style="font-size:'+ aceEditor.aceConfig.aceEditor.fontSize +'px"></div>');
+					$('[data-menu-path="'+ path +'"]').find('.file_fold').addClass('active bg');
+					_this.ace_active = _id;
+				    _this.editorLength = _this.editorLength + 1;
+					_this.creationEditor({id: _id,fileName: _fileName,path: path,mode:_mode,encoding: res.encoding,data: res.data,type:_type,historys:res.historys});
+					if(callback) callback(res);
+				});
+			}
+		});
+		$('.ace_toolbar_menu').hide();
+	},
     // 获取收藏夹列表-方法
     getFavoriteList: function() {},
     // 获取文件列表-请求
@@ -1717,17 +1795,40 @@ var aceEditor = {
         });
     },
     // 保存文件内容-请求
-    saveFileBody: function(obj, callback) {
-        var loadT = layer.msg(lan.public.save_file_content, { time: 0, icon: 16, shade: [0.3, '#000'] });
-        $.post("/files?action=SaveFileBody", {
-            data:obj.data,
-            encoding:obj.encoding.toLowerCase(),
-            path:obj.path
-        }, function(res) {
-            layer.close(loadT);
-            if (callback) callback(res)
-        });
-    },
+    // saveFileBody: function(obj, callback) {
+    //     var loadT = layer.msg(lan.public.save_file_content, { time: 0, icon: 16, shade: [0.3, '#000'] });
+    //     $.post("/files?action=SaveFileBody", {
+    //         data:obj.data,
+    //         encoding:obj.encoding.toLowerCase(),
+    //         path:obj.path
+    //     }, function(res) {
+    //         layer.close(loadT);
+    //         if (callback) callback(res)
+    //     });
+    // },
+    saveFileBody: function (obj,success,error) {
+		$.ajax({
+			type:'post',
+			url:'/files?action=SaveFileBody',
+			timeout: 7000, //设置保存超时时间
+			data:{
+				data:obj.data,
+				encoding:obj.encoding.toLowerCase(),
+				path:obj.path
+			},
+			success:function(rdata){
+				if(rdata.status){
+					if(success) success(rdata)
+				}else{
+					if(error) error(rdata)
+				}
+				if(!obj.tips) layer.msg(rdata.msg,{icon:rdata.status?1:2});
+			},
+			error:function(err){
+			    if(error) error(err)
+			}
+		});
+	},
     saveAceConfig: function(data,callback){
         var loadT = layer.msg(lan.public.save_ace_config,{time: 0,icon: 16,shade: [0.3, '#000']}),_this = this;
 		this.saveFileBody({
@@ -1907,11 +2008,97 @@ function openEditorView(type, path) {
                     return false;
                 }
             }
+        },
+        end:function(){
+            aceEditor.ace_active = '';
             aceEditor.editor = null;
             aceEditor.pathAarry = [];
-            aceEditor.editorLength = 0;
+            aceEditor.menu_path = '';
         }
     });
+}
+
+/**
+ * AES加密
+ * @param {string} s_text 等待加密的字符串
+ * @param {string} s_key 16位密钥
+ * @param {array} ctx 可选，默认为 { mode: CryptoJS.mode.ECB,padding: CryptoJS.pad.ZeroPadding }
+ * @return {string} 
+ */
+function aes_encrypt(s_text,s_key,ctx){
+	if(ctx == undefined) ctx = { mode: CryptoJS.mode.ECB,padding: CryptoJS.pad.ZeroPadding }
+	var key = CryptoJS.enc.Utf8.parse(s_key);
+	var encrypt_data = CryptoJS.AES.encrypt(s_text,key,ctx);
+	return encrypt_data.toString();
+}
+
+/**
+ * AES解密
+ * @param {string} s_text 等待解密的密文
+ * @param {string} s_key 16位密钥
+ * @param {array} ctx 可选，默认为 { mode: CryptoJS.mode.ECB,padding: CryptoJS.pad.ZeroPadding }
+ * @return {string}
+ */
+function aes_decrypt(s_text,s_key,ctx){
+	if(ctx == undefined) ctx = { mode: CryptoJS.mode.ECB,padding: CryptoJS.pad.ZeroPadding }
+	var key = CryptoJS.enc.Utf8.parse(s_key);
+	var decrypt_data = CryptoJS.AES.decrypt(s_text,key,ctx);
+	return decrypt_data.toString(CryptoJS.enc.Utf8);
+}
+
+/**
+ * ajax内容解密
+ * @param {string} data 加密的响应数据
+ * @param {string} stype ajax中定义的数据类型
+ * @return {string} 解密后的响应数据
+ */
+function ajax_decrypt(data,stype){
+	if(!data) return data;
+	if(data.substring(0,6) == "BT-CRT"){
+		var token = $("#request_token_head").attr("token")
+		var pwd = token.substring(0,8) + token.substring(40,48)
+		data = aes_decrypt(data.substring(6),pwd);
+		if(stype == undefined){
+			stype = '';
+		}
+		if(stype.toLowerCase() != 'json'){
+			data =  JSON.parse(data);
+		}
+	}
+	return data
+}
+/**
+ * 格式化form_data数据，并加密
+ * @param {string} form_data 加密前的form_data数据
+ * @return {string} 加密后的form_data数据
+ */
+function format_form_data(form_data){
+	var data_tmp = form_data.split('&');
+	var form_info = {}
+	var token = $("#request_token_head").attr("token")
+	if(!token) return form_data;
+	var pwd = token.substring(0,8) + token.substring(40,48)
+	for(var i=0;i<data_tmp.length;i++){
+		var tmp = data_tmp[i].split('=');
+		if(tmp.length < 2) continue
+		// if(!tmp[1]) continue;
+		var val = decodeURIComponent(tmp[1].replace(/\+/g,'%20'));
+		if(val.length > 3){
+			form_info[tmp[0]] = 'BT-CRT' + aes_encrypt(val,pwd);
+		}else{
+			form_info[tmp[0]] = val;
+		}
+		
+	}
+	return $.param(form_info);
+}
+
+function ajax_encrypt(request){
+	if(!this.type || !this.data || !this.contentType) return;
+	if($("#panel_debug").attr("data") == 'True') return;
+	if(this.type == 'POST' && this.data.length > 1){
+		this.data = format_form_data(this.data);
+	}
 }
 
 function ajaxSetup() {
@@ -1929,7 +2116,11 @@ function ajaxSetup() {
     }
 
     if (my_headers) {
-        $.ajaxSetup({ headers: my_headers });
+        $.ajaxSetup({ 
+			headers: my_headers,
+			dataFilter: ajax_decrypt,
+			beforeSend: ajax_encrypt
+		});
     }
 }
 ajaxSetup();
@@ -3622,7 +3813,36 @@ var Term = {
     term: null,
     term_box: null,
     ssh_info: null,
-
+    last_body:false,
+	last_cd:null,
+	config:{
+	   cols:0,
+	   rows:0,
+	   fontSize:12
+	},
+	
+	// 	缩放尺寸
+    detectZoom:(function(){
+        var ratio = 0,
+          screen = window.screen,
+          ua = navigator.userAgent.toLowerCase();
+        if (window.devicePixelRatio !== undefined) {
+          ratio = window.devicePixelRatio;
+        }
+        else if (~ua.indexOf('msie')) {
+          if (screen.deviceXDPI && screen.logicalXDPI) {
+            ratio = screen.deviceXDPI / screen.logicalXDPI;
+          }
+        }
+        else if (window.outerWidth !== undefined && window.innerWidth !== undefined) {
+          ratio = window.outerWidth / window.innerWidth;
+        }
+    
+        if (ratio){
+          ratio = Math.round(ratio * 100);
+        }
+        return ratio;
+    })(),
     //连接websocket
     connect: function() {
         if (!Term.bws || Term.bws.readyState == 3 || Term.bws.readyState == 2) {
@@ -3636,39 +3856,85 @@ var Term = {
             Term.bws.addEventListener('message', Term.on_message);
             Term.bws.addEventListener('close', Term.on_close);
             Term.bws.addEventListener('error', Term.on_error);
+            Term.bws.addEventListener('open',Term.on_open);
 
-            if (Term.ssh_info) Term.send(JSON.stringify(Term.ssh_info))
+            //if (Term.ssh_info) Term.send(JSON.stringify(Term.ssh_info))
         }
     },
+    //连接服务器成功
+	on_open:function(ws_event){
+		Term.send(JSON.stringify(Term.ssh_info || {}))
+		Term.term.FitAddon.fit();
+		Term.resize();
+		var f_path = $("#fileInputPath").val();
+		if(f_path){
+			Term.last_cd = "cd " + f_path;
+			Term.send(Term.last_cd  + "\n");
+		}
+	},
 
     //服务器消息事件
-    on_message: function(ws_event) {
-        result = ws_event.data;
-        if (result === "\r'Server connection failed'!\r" || result === "\rWrong user name or password!\r") {
-            show_ssh_login(result);
+    // on_message: function(ws_event) {
+    //     result = ws_event.data;
+    //     if (result === "\r'Server connection failed'!\r" || result === "\rWrong user name or password!\r") {
+    //         show_ssh_login(result);
+    //         Term.close();
+    //         return;
+    //     }
+    //     Term.term.write(result);
+
+    //     if (result == '\r\n登出\r\n' || result == '登出\r\n' || result == '\r\nlogout\r\n' || result == 'logout\r\n') {
+    //         setTimeout(function() {
+    //             layer.close(Term.term_box);
+    //         }, 500);
+    //         Term.close();
+    //         Term.bws = null;
+    //     }
+    // },
+    on_message: function (ws_event) {
+		result = ws_event.data;
+		if(Term.last_cd){
+			if(result.indexOf(Term.last_cd) != -1 && result.length - Term.last_cd.length < 3) {
+				Term.last_cd = null;
+				return;
+			}
+		}
+        if (result === "\rServer connection failed!\r" || result == "\rWrong user name or password!\r") {
             Term.close();
             return;
-        }
+		}
+		if(result.length > 1 && Term.last_body === false){
+			Term.last_body = true;
+		}
         Term.term.write(result);
-
-        if (result == '\r\n登出\r\n' || result == '登出\r\n' || result == '\r\nlogout\r\n' || result == 'logout\r\n') {
-            setTimeout(function() {
-                layer.close(Term.term_box);
+        if (result == '\r\n登出\r\n' || result == '\r\n注销\r\n' || result == '注销\r\n' || result == '登出\r\n' || result == '\r\nlogout\r\n' || result == 'logout\r\n') {
+            setTimeout(function () {
+				layer.close(Term.term_box);
+				Term.term.dispose();
             }, 500);
             Term.close();
             Term.bws = null;
         }
-    },
+	},
     //websocket关闭事件
     on_close: function(ws_event) {
         Term.bws = null;
     },
 
     //websocket错误事件
-    on_error: function(ws_event) {
-        if(ws_event.target.readyState === 3){
-			var msg = 'Error: unable to create websocket connection, please close 【Developer mode】 on the settings page';
-			layer.msg(msg,{time:5000})
+    // on_error: function(ws_event) {
+    //     if(ws_event.target.readyState === 3){
+	// 		var msg = 'Error: unable to create websocket connection, please close 【Developer mode】 on the settings page';
+	// 		layer.msg(msg,{time:5000})
+	// 		if(Term.state === 3) return
+	// 		Term.term.write(msg)
+	// 		Term.state = 3;
+	// 	}else{
+	// 		console.log(ws_event)
+	// 	}
+    // },
+    on_error: function (ws_event) {
+		if(ws_event.target.readyState === 3){
 			if(Term.state === 3) return
 			Term.term.write(msg)
 			Term.state = 3;
@@ -3678,18 +3944,28 @@ var Term = {
     },
 
     //关闭连接
-    close: function() {
-        Term.bws.close();
-    },
+    close: function () {
+		if(Term.bws){
+			Term.bws.close();
+		}
+	},
 
-    resize: function() {
-        var m_width = 100;
-        var m_height = 34;
-        Term.term.resize(m_width, m_height);
-        Term.term.scrollToBottom();
-        Term.term.focus();
-        Term.send('new_terminal');
+    resize: function () {
+		setTimeout(function(){
+			$("#term").height($(".term_box_all .layui-layer-content").height()-18)
+			Term.term.FitAddon.fit()
+			Term.send(JSON.stringify({resize:1,rows:Term.term.rows,cols:Term.term.cols}));
+	    	Term.term.focus();
+		},200)
     },
+    // resize: function() {
+    //     var m_width = 100;
+    //     var m_height = 34;
+    //     Term.term.resize(m_width, m_height);
+    //     Term.term.scrollToBottom();
+    //     Term.term.focus();
+    //     Term.send('new_terminal');
+    // },
 
     //发送数据
     //@param event 唯一事件名称
@@ -3713,86 +3989,112 @@ var Term = {
             }
         }
     },
-    run: function (ssh_info) {
-        var termCols = 100;
-        var termRows = 34;
-        var loadT = layer.msg('It is loading the files required by the terminal. Please wait...', { icon: 16, time: 0, shade: 0.3 });
-        loadScript([
-            "/static/build/xterm.min.js",
-            "/static/build/addons/attach/attach.min.js",
-            "/static/build/addons/fit/fit.min.js",
-            "/static/build/addons/fullscreen/fullscreen.min.js",
-            "/static/build/addons/search/search.min.js",
-            "/static/build/addons/winptyCompat/winptyCompat.js"
-        ], function () {
-            layer.close(loadT);
-            Term.term = new Terminal({ cols: termCols, rows: termRows, screenKeys: true, useStyle: true });
-            Term.term.setOption('cursorBlink', true);
-            Term.term_box = layer.open({
-                type: 1,
-                title: lan.public.terminal,
-                area: ['920px', '630px'],
-                closeBtn: 2,
-                shadeClose: false,
-                content: '<link rel="stylesheet" href="/static/build/xterm.min.css" />\
-						<link rel="stylesheet" href="/static/build/addons/fullscreen/fullscreen.min.css" />\
-	            <a class="btlink" onclick="show_ssh_login(1)" style="position: fixed;margin-left: 83px;margin-top: -30px;">[' + lan.public.set + ']</a>\
-	            <div class="term-box" style="background-color:#000"><div id="term"></div></div>',
-                cancel: function () {
-                    Term.term.destroy();
-                },
-                success: function () {
-                    Term.term.open(document.getElementById('term'));
-                    Term.resize();
-                }
-            });
-            Term.term.on('data', function (data) {
-                try {
-                    Term.bws.send(data)
-                } catch (e) {
-                    Term.term.write('\r\nThe connection is lost and you are trying to reconnect!\r\n')
-                    Term.connect()
-                }
-            });
-            if (ssh_info) Term.ssh_info = ssh_info
-            Term.connect();
-        })
-
-    },
-    // run: function(ssh_info) {
+    // run: function (ssh_info) {
     //     var termCols = 100;
     //     var termRows = 34;
-    //     Term.term = new Terminal({ cols: termCols, rows: termRows, screenKeys: true, useStyle: true });
-    //     Term.term.setOption('cursorBlink', true);
+    //     var loadT = layer.msg('It is loading the files required by the terminal. Please wait...', { icon: 16, time: 0, shade: 0.3 });
+    //     loadScript([
+    //         "/static/build/xterm.min.js",
+    //         "/static/build/addons/attach/attach.min.js",
+    //         "/static/build/addons/fit/fit.min.js",
+    //         "/static/build/addons/fullscreen/fullscreen.min.js",
+    //         "/static/build/addons/search/search.min.js",
+    //         "/static/build/addons/winptyCompat/winptyCompat.js"
+    //     ], function () {
+    //         layer.close(loadT);
+    //         Term.term = new Terminal({ cols: termCols, rows: termRows, screenKeys: true, useStyle: true });
+    //         Term.term.setOption('cursorBlink', true);
+    //         Term.term_box = layer.open({
+    //             type: 1,
+    //             title: lan.public.terminal,
+    //             area: ['920px', '630px'],
+    //             closeBtn: 2,
+    //             shadeClose: false,
+    //             content: '<link rel="stylesheet" href="/static/build/xterm.min.css" />\
+	// 					<link rel="stylesheet" href="/static/build/addons/fullscreen/fullscreen.min.css" />\
+	//             <a class="btlink" onclick="show_ssh_login(1)" style="position: fixed;margin-left: 83px;margin-top: -30px;">[' + lan.public.set + ']</a>\
+	//             <div class="term-box" style="background-color:#000"><div id="term"></div></div>',
+    //             cancel: function () {
+    //                 Term.term.destroy();
+    //             },
+    //             success: function () {
+    //                 Term.term.open(document.getElementById('term'));
+    //                 Term.resize();
+    //             }
+    //         });
+    //         Term.term.on('data', function (data) {
+    //             try {
+    //                 Term.bws.send(data)
+    //             } catch (e) {
+    //                 Term.term.write('\r\nThe connection is lost and you are trying to reconnect!\r\n')
+    //                 Term.connect()
+    //             }
+    //         });
+    //         if (ssh_info) Term.ssh_info = ssh_info
+    //         Term.connect();
+    //     })
 
-    //     Term.term_box = layer.open({
-    //         type: 1,
-    //         title: lan.public.terminal,
-    //         area: ['920px', '630px'],
-    //         closeBtn: 2,
-    //         shadeClose: false,
-    //         content: '<a class="btlink" onclick="show_ssh_login(1)" style="position: fixed;margin-left: 140px;margin-top: -30px;">[' + lan.public.set + ']</a><div class="term-box" style="background-color:#000"><div id="term"></div></div>',
-    //         cancel: function() {
-    //             Term.term.destroy();
-
-    //         },
-    //         success: function() {
-    //             Term.term.open(document.getElementById('term'));
-    //             Term.resize();
-    //         }
-    //     });
-
-    //     Term.term.on('data', function(data) {
-    //         try {
-    //             Term.bws.send(data)
-    //         } catch (e) {
-    //             Term.term.write('\r\nThe connection is lost and you are trying to reconnect!\r\n')
-    //             Term.connect()
-    //         }
-    //     });
-    //     if (ssh_info) Term.ssh_info = ssh_info
-    //     Term.connect();
     // },
+    run: function (ssh_info) {
+		if($("#panel_debug").attr("data") == 'True') {
+			layer.msg('Error: unable to create websocket connection, please close 【Developer mode】 on the settings page!',{icon:2,time:5000});
+			return;
+		}
+        var loadT = layer.msg('It is loading the files required by the terminal. Please wait...', { icon: 16, time: 0, shade: 0.3 });
+        loadScript([
+        	"/static/js/xterm.js"
+        ],function(){
+        	layer.close(loadT);
+        	Term.term = new Terminal({
+				rendererType: "canvas",
+				cols: 100, 
+				rows: 34,
+				fontSize:15, 
+				screenKeys: true, 
+				useStyle: true ,
+				});
+			Term.term.setOption('cursorBlink', true);
+			Term.last_body = false;
+	        Term.term_box = layer.open({
+	            type: 1,
+	            title: lan.public.terminal,
+	            area: ['920px', '630px'],
+	            closeBtn: 2,
+	            shadeClose: false,
+	            skin:'term_box_all',
+	            content: '<link rel="stylesheet" href="/static/css/xterm.css" />\
+	            <div class="term-box" style="background-color:#000" id="term"></div>',
+	            cancel: function (index,lay) {
+					bt.confirm({msg:'Closing the SSH session, the command in progress in the current command line session may be aborted. Continute?',title: "Cofirm to close the SSH session?"},function(ix){
+						Term.term.dispose();
+						layer.close(index);
+						layer.close(ix);
+						Term.close();
+					});
+					return false;
+	            },
+	            success: function () {
+	                $('.term_box_all').css('background-color','#000');
+					Term.term.open(document.getElementById('term'));
+					Term.term.FitAddon = new FitAddon.FitAddon();
+					Term.term.loadAddon(Term.term.FitAddon);
+					Term.term.WebLinksAddon = new WebLinksAddon.WebLinksAddon()
+					Term.term.loadAddon(Term.term.WebLinksAddon)
+	            }
+	        });
+	        Term.term.onData(function (data) {
+	            try {
+	                Term.bws.send(data)
+	            } catch (e) {
+	                Term.term.write('\r\nThe connection is lost and you are trying to reconnect!\r\n')
+	                Term.connect()
+	            }
+	        });
+	        if (ssh_info) Term.ssh_info = ssh_info
+	        Term.connect();
+        });
+
+    },
     reset_login: function() {
         var ssh_info = {
             data: JSON.stringify({

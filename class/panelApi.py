@@ -4,7 +4,7 @@
 # +-------------------------------------------------------------------
 # | Copyright (c) 2015-2017 宝塔软件(http://bt.cn) All rights reserved.
 # +-------------------------------------------------------------------
-# | Author: 阿良 <287962566@qq.com>
+# | Author: hwliang <hwl@bt.cn>
 # +-------------------------------------------------------------------
 import public,os,json,time
 class panelApi:
@@ -29,6 +29,17 @@ class panelApi:
         data['apps'] = sorted(data['apps'],key=lambda x: x['time'],reverse=True)
         del(data['key'])
         return data
+
+
+    def login_for_app(self,get):
+        from BTPanel import cache
+        tid = get.tid
+        if(len(tid) != 12): return public.returnMsg(False,'Invalid login key')
+        session_id = cache.get(tid)
+        if not session_id: return public.returnMsg(False,'The specified key does not exist or has expired')
+        if(len(session_id) != 64): return public.returnMsg(False,'Invalid login key')
+        cache.set(session_id,'True',120)
+        return public.returnMsg(True,'Scan code successfully, log in!')
 
     def get_api_config(self):
         tmp = public.ReadFile(self.save_path)

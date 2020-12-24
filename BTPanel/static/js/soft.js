@@ -17,6 +17,7 @@ var soft = {
             return;
         }
         soft.is_install = false;
+        console.log(type)
         bt.soft.get_soft_list(page, type, search, function(rdata) {
             if (rdata.pro < 0) {
                 $("#updata_pro_info").html('');
@@ -98,7 +99,31 @@ var soft = {
                                     click_opt += ' onclick="soft.set_soft_config(\'' + item.name + '\')" ';
                                 }
                             }
-                            if (rdata.apache22 && item.name.indexOf('php-') >= 0 && $.inArray(item.name, phps) == -1) click_opt = ' title="' + lan.soft.ap2_2_not_support + '"';
+                            var is_php5 = item.name.indexOf('php-5') >= 0,
+                            webcache = bt.get_cookie('serverType') == 'openlitespeed' ? true : false,
+                            distribution = bt.get_cookie('distribution');
+                            if (webcache) {
+                                switch (distribution) {
+                                    case 'centos8':
+                                        if (is_php5 || item.name == 'php-7.0') {
+                                            click_opt = ' title="' + lan.soft.ap2_2_not_support + '"';
+                                        }
+                                        break;
+                                    case 'centos7':
+                                        if (item.name == 'php-5.2') {
+                                            click_opt = ' title="' + lan.soft.ap2_2_not_support + '"';
+                                        }
+                                        break;
+                                    default:
+                                        if (is_php5) {
+                                            click_opt = ' title="' + lan.soft.ap2_2_not_support + '"';
+                                        }
+                                        break;
+                                }
+                            }else if (rdata.apache22 && item.name.indexOf('php-') >= 0 && $.inArray(item.name, phps) == -1){
+                                click_opt = ' title="' + lan.soft.ap2_2_not_support + '"';
+                            }
+                            //if (rdata.apache22 && item.name.indexOf('php-') >= 0 && $.inArray(item.name, phps) == -1) click_opt = ' title="' + lan.soft.ap2_2_not_support + '"';
                             return '<span ' + click_opt + ' ' + sStyle + ' ><img src="/static/img/soft_ico/ico-' + fName + '.png">' + item.title + ' ' + version + '</span>';
                         }
                     },
@@ -225,7 +250,7 @@ var soft = {
                     },
                     {
                         field: 'opt',
-                        width: 180,
+                        width: 190,
                         title: lan.soft.operate,
                         align: 'right',
                         templet: function(item) {
@@ -254,67 +279,114 @@ var soft = {
                             var is_php = item.name.indexOf('php-') >= 0,
                             is_php5 = item.name.indexOf('php-5') >= 0,
                             webcache = bt.get_cookie('serverType') == 'openlitespeed' ? true : false,
-                            redhat  = rdata.Redhat;
-                            if (rdata.apache22 && is_php && $.inArray(item.name, phps) == -1) {
-                                if (item.setup) {
-                                    option = '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
-                                } else {
+                            distribution = bt.get_cookie('distribution');
+                            if (webcache && is_php) {
+                                if ((is_php5 || item.name == 'php-7.0') && distribution=='centos8') {
                                     option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
-                                }
-                            } else if (rdata.apache24 && item.name == 'php-5.2') {
-                                if (item.setup) {
-                                    option = '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
-                                } else {
+                                }else if (distribution=='centos7'&&item.name == 'php-5.2') {
                                     option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
-                                }
-                            } else {
-                                if (item.setup && item.task == '1') {
-                                    if (pay_opt == '') {
-                                        if (item.versions.length > 1) {
-                                            for (var i = 0; i < item.versions.length; i++) {
-                                                var min_version = item.versions[i]
-                                                var ret = bt.check_version(item.version, min_version.m_version + '.' + min_version.version);
-                                                if (ret > 0) {
-                                                    if (ret == 2) option += '<a class="btlink" onclick="bt.soft.update_soft(\'' + item.name + '\',\'' + item.title + '\',\'' + min_version.m_version + '\',\'' + min_version.version + '\',\'' + min_version.update_msg.replace(/\n/g, "_bt_") + '\')" >' + lan.soft.update + '</a> | ';
-                                                    break;
+                                }else{
+                                    if (distribution!='centos7'&&is_php5) {
+                                        option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
+                                    } else {
+                                        if (item.setup && item.task == '1') {
+                                            if (pay_opt == '') {
+                                                if (item.versions.length > 1) {
+                                                    for (var i = 0; i < item.versions.length; i++) {
+                                                        var min_version = item.versions[i]
+                                                        var ret = bt.check_version(item.version, min_version.m_version + '.' + min_version.version);
+                                                        if (ret > 0) {
+                                                            if (ret == 2) option += '<a class="btlink" onclick="bt.soft.update_soft(\'' + item.name + '\',\'' + item.title + '\',\'' + min_version.m_version + '\',\'' + min_version.version + '\',\'' + min_version.update_msg.replace(/\n/g, "_bt_") + '\')" >' + lan.soft.update + '</a> | ';
+                                                            break;
+                                                        }
+                                                    }
+                                                } else {
+                                                    var min_version = item.versions[0];
+                                                    var cloud_version = min_version.m_version + '.' + min_version.version;
+                                                    if (item.version != cloud_version) option += '<a class="btlink" onclick="bt.soft.update_soft(\'' + item.name + '\',\'' + item.title + '\',\'' + min_version.m_version + '\',\'' + min_version.version + '\',\'' + min_version.update_msg.replace(/\n/g, "_bt_") + '\')" >' + lan.soft.update + '</a> | ';
                                                 }
+                                                if (item.admin) {
+                                                    option += '<a class="btlink" onclick="bt.soft.set_lib_config(\'' + item.name + '\',\'' + item.title + '\')">' + lan.soft.setup + '</a> | ';
+                                                } else {
+                                                    option += '<a class="btlink" onclick="soft.set_soft_config(\'' + item.name + '\')">' + lan.soft.setup + '</a> | ';
+                                                }
+                                            } else {
+                                                option = pay_opt + ' | ' + option;
+                                            }
+                                            option += '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
+                                        } else if (item.task == '-1') {
+                                            option = '<a class="btlink" onclick="messagebox()"  >' + lan.soft.installing + '</a>';
+                                            soft.is_install = true;
+                                        } else if (item.task == '0') {
+                                            option = '<a class="btlink" onclick="messagebox()"  >' + lan.soft.wait_install + '</a>';
+                                            soft.is_install = true;
+                                        } else if (item.task == '-2') {
+                                            option = '<a class="btlink" onclick="messagebox()"  >Updating</a>';
+                                            soft.is_install = true;
+                                        } else {
+                                            if (pay_opt) {
+                                                option = pay_opt;
+                                            } else {
+                                                option = '<a class="btlink" onclick="bt.soft.install(\'' + item.name + '\')"  >' + lan.soft.install + '</a>';
+                                            }
+                                        }
+                                    }
+                                }
+                            }else {
+                                if (rdata.apache22 && is_php && $.inArray(item.name, phps) == -1) {
+                                    if (item.setup) {
+                                        option = '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
+                                    } else {
+                                        option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
+                                    }
+                                } else if (rdata.apache24 && item.name == 'php-5.2') {
+                                    if (item.setup) {
+                                        option = '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
+                                    } else {
+                                        option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
+                                    }
+                                } else {
+                                    if (item.setup && item.task == '1') {
+                                        if (pay_opt == '') {
+                                            if (item.versions.length > 1) {
+                                                for (var i = 0; i < item.versions.length; i++) {
+                                                    var min_version = item.versions[i]
+                                                    var ret = bt.check_version(item.version, min_version.m_version + '.' + min_version.version);
+                                                    if (ret > 0) {
+                                                        if (ret == 2) option += '<a class="btlink" onclick="bt.soft.update_soft(\'' + item.name + '\',\'' + item.title + '\',\'' + min_version.m_version + '\',\'' + min_version.version + '\',\'' + min_version.update_msg.replace(/\n/g, "_bt_") + '\')" >' + lan.soft.update + '</a> | ';
+                                                        break;
+                                                    }
+                                                }
+                                            } else {
+                                                var min_version = item.versions[0];
+                                                var cloud_version = min_version.m_version + '.' + min_version.version;
+                                                if (item.version != cloud_version) option += '<a class="btlink" onclick="bt.soft.update_soft(\'' + item.name + '\',\'' + item.title + '\',\'' + min_version.m_version + '\',\'' + min_version.version + '\',\'' + min_version.update_msg.replace(/\n/g, "_bt_") + '\')" >' + lan.soft.update + '</a> | ';
+                                            }
+                                            if (item.admin) {
+                                                option += '<a class="btlink" onclick="bt.soft.set_lib_config(\'' + item.name + '\',\'' + item.title + '\')">' + lan.soft.setup + '</a> | ';
+                                            } else {
+                                                option += '<a class="btlink" onclick="soft.set_soft_config(\'' + item.name + '\')">' + lan.soft.setup + '</a> | ';
                                             }
                                         } else {
-                                            var min_version = item.versions[0];
-                                            var cloud_version = min_version.m_version + '.' + min_version.version;
-                                            if (item.version != cloud_version) option += '<a class="btlink" onclick="bt.soft.update_soft(\'' + item.name + '\',\'' + item.title + '\',\'' + min_version.m_version + '\',\'' + min_version.version + '\',\'' + min_version.update_msg.replace(/\n/g, "_bt_") + '\')" >' + lan.soft.update + '</a> | ';
+                                            option = pay_opt + ' | ' + option;
                                         }
-                                        if (item.admin) {
-                                            option += '<a class="btlink" onclick="bt.soft.set_lib_config(\'' + item.name + '\',\'' + item.title + '\')">' + lan.soft.setup + '</a> | ';
+                                        option += '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
+                                    } else if (item.task == '-1') {
+                                        option = '<a class="btlink" onclick="messagebox()"  >' + lan.soft.installing + '</a>';
+                                        soft.is_install = true;
+                                    } else if (item.task == '0') {
+                                        option = '<a class="btlink" onclick="messagebox()"  >' + lan.soft.wait_install + '</a>';
+                                        soft.is_install = true;
+                                    } else if (item.task == '-2') {
+                                        option = '<a class="btlink" onclick="messagebox()"  >Updating</a>';
+                                        soft.is_install = true;
+                                    } else {
+                                        if (pay_opt) {
+                                            option = pay_opt;
                                         } else {
-                                            option += '<a class="btlink" onclick="soft.set_soft_config(\'' + item.name + '\')">' + lan.soft.setup + '</a> | ';
+                                            option = '<a class="btlink" onclick="bt.soft.install(\'' + item.name + '\')"  >' + lan.soft.install + '</a>';
                                         }
-                                    } else {
-                                        option = pay_opt + ' | ' + option;
                                     }
-                                    option += '<a class="btlink" onclick="bt.soft.un_install(\'' + item.name + '\')" >' + lan.soft.uninstall + '</a>';
-                                } else if (item.task == '-1') {
-                                    option = '<a class="btlink" onclick="messagebox()"  >' + lan.soft.installing + '</a>';
-                                    soft.is_install = true;
-                                } else if (item.task == '0') {
-                                    option = '<a class="btlink" onclick="messagebox()"  >' + lan.soft.wait_install + '</a>';
-                                    soft.is_install = true;
-                                } else if (item.task == '-2') {
-                                    option = '<a class="btlink" onclick="messagebox()"  >Updating</a>';
-                                    soft.is_install = true;
-                                } else {
-                                    if (pay_opt) {
-                                        option = pay_opt;
-                                    } else {
-                                        option = '<a class="btlink" onclick="bt.soft.install(\'' + item.name + '\')"  >' + lan.soft.install + '</a>';
-                                    }
-                                }
-                            }
-                            if (webcache && is_php5) {
-                                if (!redhat) {
-                                    option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
-                                } else if (item.name == 'php-5.2'){
-                                    option = '<span title="\' + lan.soft.ap2_2_not_support + \'">' + lan.soft.not_comp + '</span>';
                                 }
                             }
                             return option;
@@ -902,11 +974,30 @@ var soft = {
                     ]
                     if (data.name == 'phpmyadmin') {
                         status_list = [status_list[0]];
+                    }else{
+                        var btns = $('<div class="sfm-opt"></div>');
+                        for (var i = 0; i < status_list.length; i++)  btns.append('<button class="btn btn-default btn-sm" onclick="bt.pub.set_server_status(\'' + data.name + '\',\'' + status_list[i].opt + '\')">' + status_list[i].title + '</button>');
+                        tabCon.append('<p class="status">' + lan.soft.status + '：<span>' + (data.status ? lan.soft.on : lan.soft.off) + '</span><span style="color: ' + (data.status ? '#20a53a;' : 'red;') + ' margin-left: 3px;" class="glyphicon ' + (data.status ? 'glyphicon glyphicon-play' : 'glyphicon-pause') + '"></span></p');
+                        tabCon.append(btns);
                     }
-                    var btns = $('<div class="sfm-opt"></div>');
-                    for (var i = 0; i < status_list.length; i++) btns.append('<button class="btn btn-default btn-sm" onclick="bt.pub.set_server_status(\'' + data.name + '\',\'' + status_list[i].opt + '\')">' + status_list[i].title + '</button>');
-                    tabCon.append('<p class="status">' + lan.soft.status + '：<span>' + (data.status ? lan.soft.running : lan.soft.stop) + '</span><span style="color: ' + (data.status ? '#20a53a;' : 'red;') + ' margin-left: 3px;" class="glyphicon ' + (data.status ? 'glyphicon glyphicon-play' : 'glyphicon-pause') + '"></span></p');
-                    tabCon.append(btns);
+
+                    // var btns = $('<div class="sfm-opt"></div>');
+                    // for (var i = 0; i < status_list.length; i++) btns.append('<button class="btn btn-default btn-sm" onclick="bt.pub.set_server_status(\'' + data.name + '\',\'' + status_list[i].opt + '\')">' + status_list[i].title + '</button>');
+                    // tabCon.append('<p class="status">' + lan.soft.status + '：<span>' + (data.status ? lan.soft.running : lan.soft.stop) + '</span><span style="color: ' + (data.status ? '#20a53a;' : 'red;') + ' margin-left: 3px;" class="glyphicon ' + (data.status ? 'glyphicon glyphicon-play' : 'glyphicon-pause') + '"></span></p');
+                    // tabCon.append(btns);
+
+                    if (data.name == 'phpmyadmin') {
+                        tabCon.append('<div style="padding-top:25px;">\
+                        <div class="info-r "><input type="checkbox" class="status" '+(data.status?'checked':'')+' id="pma_status" name="status" onclick="bt.pub.set_server_status(\'' + data.name + '\',\'' + (data.status?'stop':'start') + '\')" style="vertical-align: top;margin-right: 10px;"><label class="mr20" for="pma_status" style="font-weight:normal;vertical-align: sub;">Enable public access</label></div>\
+                        <p style="margin-top:5px;"><span>Public access address: </span><a class="btlink" href="' + data.ext.url + '" target="_blank">' + data.ext.url + '</a></p>\
+                        </div>');
+                        tabCon.append('<ul class="help-info-text c7 mtb15" style="padding-top:30px">\
+                            <li>PhpMyAdmin enabling public access may have security risks. It is recommended not to enable it unnecessarily!</li>\
+                            <li>The current version of phpmyadin no longer relies on Nginx / Apache without requiring public access.</li>\
+                            <li>The service state of phpMyAdmin does not affect access to phpMyAdmin through the panel (non-public).</li>\
+                            <li>If the public access right is not turned on, the panel will take over the access right, that is, you need to log in to the panel to access.</li>\
+                        </ul>');
+                    }
 
                     var help = '<ul class="help-info-text c7 mtb15" style="padding-top:30px"><li>' + lan.soft.mysql_mem_err + '</li></ul>';
                     if (name == 'mysqld') tabCon.append(help);
@@ -1110,7 +1201,7 @@ var soft = {
                         var title11 = ((1 - rdata.Key_reads / rdata.Key_read_requests) * 100).toFixed(2);
                         var title12 = ((1 - rdata.Innodb_buffer_pool_reads / rdata.Innodb_buffer_pool_read_requests) * 100).toFixed(2);
                         var title14 = ((rdata.Created_tmp_disk_tables / rdata.Created_tmp_tables) * 100).toFixed(2);
-                        var Con = '<div class="divtable"><table class="table table-hover table-bordered" style="width: 590px;margin-bottom:10px;background-color:#fafafa">\
+                        var Con = '<div class="divtable"><table class="table table-hover table-bordered" style="margin-bottom:10px;background-color:#fafafa">\
 								<tbody>\
 									<tr><th>' + lan.soft.mysql_status_title1 + '</th><td>' + getLocalTime(rdata.Run) + '</td><th>' + lan.soft.mysql_status_title5 + '</th><td>' + parseInt(rdata.Questions / rdata.Uptime) + '</td></tr>\
 									<tr><th>' + lan.soft.mysql_status_title2 + '</th><td>' + rdata.Connections + '</td><th>' + lan.soft.mysql_status_title6 + '</th><td>' + parseInt((parseInt(rdata.Com_commit) + parseInt(rdata.Com_rollback)) / rdata.Uptime) + '</td></tr>\
@@ -1118,7 +1209,7 @@ var soft = {
 									<tr><th>' + lan.soft.mysql_status_title4 + '</th><td>' + ToSize(rdata.Bytes_received) + '</td><th>' + lan.soft.mysql_status_title8 + '</th><td>' + rdata.Position + '</td></tr>\
 								</tbody>\
 								</table>\
-								<table class="table table-hover table-bordered" style="width: 490px;margin-bottom: 10px;">\
+								<table class="table table-hover table-bordered" style="margin-bottom: 10px;">\
 								<thead style="display:none;"><th></th><th></th><th></th><th></th></thead>\
 								<tbody>\
 									<tr><th>' + lan.soft.mysql_status_title9 + '</th><td>' + rdata.Threads_running + '/' + rdata.Max_used_connections + '</td><td colspan="2">' + lan.soft.mysql_status_ps1 + '</td></tr>\
@@ -1849,16 +1940,16 @@ var soft = {
                                     <button class="btn btn-success btn-sm ssl_port_button" >Save</button>\
                                 </div>\
                                 <div class="user_pw_tit">\
-                                    <span class="tit">' + lan.soft.pma_pass + '</span>\
+                                    <span class="tit" style="width: 160px;padding-right: 20px;">' + lan.soft.pma_pass + '</span>\
                                     <span class="btswitch-p"><input class="btswitch btswitch-ios" id="phpmyadminsafe" type="checkbox" ' + (sdata.ext.auth ? 'checked' : '') + '>\
                                     <label class="btswitch-btn phpmyadmin-btn phpmyadmin_safe" for="phpmyadminsafe" ></label>\
                                     </span>\
                                 </div>\
-                                <div class="user_pw">\
-                                    <p><span>' + lan.soft.pma_user + '</span><input id="username_get" class="bt-input-text" name="username_get" value="" type="text" placeholder="' + lan.soft.edit_empty + '"></p>\
-                                    <p><span>' + lan.soft.pma_pass1 + '</span><input id="password_get_1" class="bt-input-text" name="password_get_1" value="" type="password" placeholder="' + lan.soft.edit_empty + '"></p>\
-                                    <p><span>' + lan.soft.pma_pass2 + '</span><input id="password_get_2" class="bt-input-text" name="password_get_1" value="" type="password" placeholder="' + lan.soft.edit_empty + '"></p>\
-                                    <p><button class="btn btn-success btn-sm phpmyadmin_safe_save" >' + lan.public.save + '</button></p>\
+                                <div class="user_pw" style="margin-top:5px;">\
+                                    <p><span style="width: 160px;padding-right: 20px;">' + lan.soft.pma_user + '</span><input id="username_get" class="bt-input-text" name="username_get" value="" type="text" placeholder="' + lan.soft.edit_empty + '"></p>\
+                                    <p><span style="width: 160px;padding-right: 20px;">' + lan.soft.pma_pass1 + '</span><input id="password_get_1" class="bt-input-text" name="password_get_1" value="" type="password" placeholder="' + lan.soft.edit_empty + '"></p>\
+                                    <p><span style="width: 160px;padding-right: 20px;">' + lan.soft.pma_pass2 + '</span><input id="password_get_2" class="bt-input-text" name="password_get_1" value="" type="password" placeholder="' + lan.soft.edit_empty + '"></p>\
+                                    <p><button class="btn btn-success btn-sm phpmyadmin_safe_save" style="margin-left:160px;">' + lan.public.save + '</button></p>\
                                 </div>\
                                 <ul class="help-info-text c7"><li>' + lan.soft.pma_ps + '</li></ul>';
 
@@ -2016,7 +2107,7 @@ var soft = {
                                 {
                                     field: 'opt',
                                     title: lan.public.action,
-                                    width: 50,
+                                    width: 60,
                                     templet: function(item) {
                                         var opt = '<a class="btlink lib-install" data-name="' + item.name + '" data-title="' + item.title + '"  href="javascript:;">' + lan.soft.install + '</a>'
                                         if (item['task'] == '-1' && item.phpversions.indexOf(version) != -1) {
@@ -2743,13 +2834,15 @@ var soft = {
                                     type: 'button',
                                     width: '62px',
                                     callback: function(ldata) {
-                                        var datal = {};
+                                        var datal = {},
+                                        loadP = bt.load();
                                         delete ldata.btn_fresh;
                                         delete ldata.btn_save;
                                         ldata['enableGzipCompress']=$("#enableGzipCompress").prop('checked')?1:0;
                                         ldata = JSON.stringify(ldata);
                                         datal = { array: ldata };
                                         bt.send('set_ols_value', 'config/set_ols_value', datal, function(res) {
+                                            loadP.close();
                                             soft.get_tab_contents(key, obj);
                                             bt.msg(res);
                                         });
@@ -2873,7 +2966,7 @@ function soft_td_width_auto() {
     } else {
         thead_width = winWidth / 3.5;
     }
-    $('#softList thead th:eq(2)').width(thead_width);
+    //$('#softList thead th:eq(2)').width(thead_width);
     $('#softList tbody tr td:nth-child(8n+2)>span').width(thead_width + 75);
 }
 
